@@ -6,9 +6,9 @@ Section with_cpp.
   Context  `{MOD : module ⊧ σ}. (* σ is the whole program *)
 
   Parameter mutex_rep : cQp.t -> mpred -> Rep.
-  #[only(cfractional,timeless)] derive mutex_rep.
+  (* #[only(cfractional,timeless)] derive mutex_rep. *)
   Parameter mutex_token : cQp.t -> mpred.
-  #[only(cfractional)] derive mutex_token.
+  (* #[only(cfractional)] derive mutex_token. *)
 
   Import auto_frac auto_pick_frac.
 
@@ -54,16 +54,6 @@ Section with_cpp.
       iExists emp. go. (* doesn't automatically split mutex_token *)
       (* we could prove this without the splittable instance by manually
         instantiating the fraction at each call to lock/unlock *)
-      iFrame.
-      go.
-      iFrame.
-      go.
-      iFrame.
-      go.
-  Qed.
-
-
-  End with_cpp.
       iFrame.
       go.
       iFrame.
