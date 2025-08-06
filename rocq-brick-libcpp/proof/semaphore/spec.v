@@ -1,5 +1,6 @@
 Require Import bluerock.auto.cpp.proof.
 Require Import bluerock.brick.libcpp.semaphore.test_cpp. (* TODO: should be changed to [inc_hpp] *)
+Set Debug "-backtrace". (* Paolo: Workaround for now-fixed bug.*)
 
 Import auto_frac auto_pick_frac.
 
@@ -22,6 +23,12 @@ Section with_cpp.
 #[global] Declare Instance semaphore_Val_affine : Affine2 semaphore_Val.
 (* we might now have semaphore implemented with atomics *)
 
+  Definition acquire_ac t Q  : mpred :=
+    AC << ∀ n : nat, semaphore_Val t n >> @ ⊤, ∅
+       << ∃ n' : nat, [| n = S n' |] ∗ semaphore_Val t n',
+        COMM Q >>.
+  Hint Opaque acquire_ac : br_opacity.
+
   (* write this as a logically atomic triple *)
   cpp.spec "std::__1::counting_semaphore<1l>::counting_semaphore(long)" as ctor_spec with
       (\this this
@@ -32,24 +39,37 @@ Section with_cpp.
   cpp.spec "std::__1::counting_semaphore<1l>::acquire()" as acquire_spec with
       (\this this
        \prepost{q g} this |-> semaphoreR q g
-       \pre{Q} AC << ∀ n, semaphore_Val g n >> @ top, empty
-                  << Exists n', [|n = S n'|] ** semaphore_Val g n', COMM Q  >>
+       \pre{Q} acquire_ac g Q
        \post Q).
+
+  Definition try_acquire_ac g Q : mpred := 
+    AU <{ ∃∃ n, semaphore_Val g n }> @ top, empty
+       <{ semaphore_Val g (if bool_decide (n = 0) then n else n-1), COMM Q $ bool_decide (n = 0) }>.
+  Hint Opaque try_acquire_ac : br_opacity.
+
+
 
   cpp.spec "std::__1::counting_semaphore<1l>::try_acquire()" as try_lock_spec with
       (\this this
          \prepost{q g} this |-> semaphoreR q g (* part of both pre and post *)
-         \pre{Q} AU <{ ∃∃ n, semaphore_Val g n }> @ top, empty
-                  <{ semaphore_Val g (if bool_decide (n = 0) then n else n-1), COMM Q $ bool_decide (n = 0) }>
+         \pre{Q} try_acquire_ac g Q
+         (* AU <{ ∃∃ n, semaphore_Val g n }> @ top, empty
+                  <{ semaphore_Val g (if bool_decide (n = 0) then n else n-1), COMM Q $ bool_decide (n = 0) }> *)
         \post{b}[Vbool b] (Q b)).
+
+  Definition release_ac g Q update : mpred :=
+    AC << ∀ n, semaphore_Val g n ∗ [| n+update <= 1 |] >> @ top, empty
+       << semaphore_Val g (n+update), COMM Q  >>.
+  Hint Opaque release_ac : br_opacity.
 
   cpp.spec "std::__1::counting_semaphore<1l>::release(long)" as release_spec with
       (\this this
         \arg{update} "update" (Vnat update)
         \prepost{q g} this |-> semaphoreR q g
-        \pre{Q} AC << ∀ n, semaphore_Val g n ∗ [| n+update <= 1 |] >> @ top, empty
-                   << semaphore_Val g (n+update), COMM Q  >>
+        \pre{Q} release_ac g Q update
        \post Q).
+
+  cpp.spec "std::__1::__atomic_semaphore_base::release(long)" inline.
 
   cpp.spec "std::__1::counting_semaphore<1l>::~counting_semaphore()" as dtor_spec with
       (\this this
@@ -64,26 +84,48 @@ Section with_cpp.
   (* LHS learns RHS *)
   #[global] Declare Instance inst v n : Refine1 true true (Vint v = Vnat n) ([n = Z.to_nat v]).
   #[global] Declare Instance semaphoreR_learnable : LearnEqF1 semaphoreR.
-  
+
+  Theorem release_ok : verify[module] release_spec.
+  Proof using MOD.
+    verify_spec.
+    go.
+    (* TODO need to have specs for atomic wait/notify *)
+  Admitted.
+
   #[program]
-  Definition ac_C t (x:nat) :=
+  Definition ac_C :=
     \cancelx
-    \consuming semaphore_Val t x
+    \consuming{t (x:nat)} semaphore_Val t x
     \bound_existential Q
-    \proving AC << ∀ n : nat, semaphore_Val t n >> @ ⊤, ∅
-         << ∃ n' : nat, [| n = S n' |] ∗
-          semaphore_Val t n',
-        COMM Q >>
-    \instantiate Q:=emp
-    \through ([| 0 < x |] ∗ semaphore_Val t (x - 1) -∗ emp)
+    \proving acquire_ac t Q
+    \instantiate Q := semaphore_Val t (x - 1) ** [| x > 0 |]
+    \end.
+  Next Obligation. 
+    work.
+  Admitted.
+  Hint Resolve ac_C : br_hints.
+
+  #[program]
+  Definition rel_ac_C :=
+    \cancelx
+    \consuming{t (x:nat)} semaphore_Val t x
+    \bound_existential Q
+    \proving{update} release_ac t Q update
+    \instantiate Q := semaphore_Val t (x + update)
+    \through [| x + update <= 1 |]
     \end.
   Next Obligation. Admitted.
-  Hint Resolve ac_C : br_opacity.
+  Hint Resolve rel_ac_C : br_hints.
+
+  (* TODO try_acquire_ac_C  *) 
 
   Theorem test_ok : verify[module] test_spec.
-  Proof. verify_spec; go.
-    Fail progress go using ac_C.
-  Admitted.
+  Proof using MOD.
+    verify_spec.
+    go.
+  Qed.
+    (* Set BR Debug "@all=3".
+    progress with_log! go using ac_C. *)
 
 
 End with_cpp.

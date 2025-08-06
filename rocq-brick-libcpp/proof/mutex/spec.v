@@ -2,6 +2,7 @@
 Require Import bluerock.auto.cpp.proof.
 Require Import bluerock.brick.libcpp.mutex.test_cpp. (* TODO: this should be replaced with [inc_hpp] *)
 
+Set Debug "-backtrace". (* Paolo: Workaround for now-fixed bug.*)
 Section with_cpp.
   Context `{Σ : cpp_logic}.
   Context  `{MOD : test_cpp.module ⊧ σ}. (* σ is the whole program *)
