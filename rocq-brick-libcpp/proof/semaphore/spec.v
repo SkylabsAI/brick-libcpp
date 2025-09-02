@@ -100,9 +100,18 @@ Section with_cpp.
     \proving acquire_ac t Q
     \instantiate Q := semaphore_Val t (x - 1) ** [| x > 0 |]
     \end.
-  Next Obligation. 
+  Next Obligation.
     work.
-  Admitted.
+    rewrite /acquire_ac.
+    iAcIntro.
+    rewrite /commit_acc /=.
+    iExists _; iFrame.
+    iMod (fupd_mask_subseteq ∅) as "Close"; first by solve_ndisj.
+    iIntros "!>" (x)  "[-> ?]".
+    iMod "Close". iModIntro.
+    replace (S x - 1) with x by lia.
+    iFrame. iPureIntro. lia.
+  Qed.
   Hint Resolve ac_C : br_hints.
 
   #[program]
@@ -114,7 +123,17 @@ Section with_cpp.
     \instantiate Q := semaphore_Val t (x + update)
     \through [| x + update <= 1 |]
     \end.
-  Next Obligation. Admitted.
+  Next Obligation.
+    work.
+    rewrite /release_ac.
+    iAcIntro.
+    rewrite /commit_acc /=.
+    iExists _; iFrame.
+    iMod (fupd_mask_subseteq ∅) as "Close"; first by solve_ndisj.
+    iFrame "%".
+    iIntros "!> $".
+    iMod "Close". done.
+  Qed.
   Hint Resolve rel_ac_C : br_hints.
 
   (* TODO try_acquire_ac_C  *) 
