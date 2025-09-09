@@ -18,64 +18,64 @@ Section with_cpp.
 
   Context  `{MOD : test_cpp.module ⊧ σ}. (* σ is the whole program *)
 
-  Parameter mutex_rep : cQp.t -> mpred -> Rep.
-  Declare Instance mutex_rep_cfrac : CFractional1 mutex_rep.
-  Declare Instance mutex_rep_ascfrac : AsCFractional1 mutex_rep.
-  Declare Instance mutex_rep_cfracvalid : CFracValid1 mutex_rep.
-  Declare Instance mutex_rep_timeless : Timeless2 mutex_rep.
+  Parameter mutex_rep : cQp.t -> gname -> mpred -> Rep.
+  Declare Instance mutex_rep_cfrac : CFractional2 mutex_rep.
+  Declare Instance mutex_rep_ascfrac : AsCFractional2 mutex_rep.
+  Declare Instance mutex_rep_cfracvalid : CFracValid2 mutex_rep.
+  Declare Instance mutex_rep_timeless : Timeless3 mutex_rep.
     
   (* #[only(cfractional,timeless)] derive mutex_rep. *)
   (* TODO: index this by the specific mutex! Either via a mutex_gname or by making this a Rep *)
-  Parameter mutex_token : cQp.t -> mpred.
+  Parameter mutex_token : cQp.t -> gname -> mpred.
   Declare Instance mutex_token_cfrac : CFractional1 mutex_token.
   Declare Instance mutex_token_ascfrac : AsCFractional1 mutex_token.
   Declare Instance mutex_token_cfracvalid : CFracValid1 mutex_token.
-  Declare Instance mutex_token_timeless : Timeless1 mutex_token.
+  Declare Instance mutex_token_timeless : Timeless2 mutex_token.
   (* #[only(cfractional)] derive mutex_token. *)
 
   Import auto_frac auto_pick_frac.
 
-  #[global] Declare Instance mutex_rep_learnable : LearnEqF1 mutex_rep.
+  #[global] Declare Instance mutex_rep_learnable : LearnEqF2 mutex_rep.
   (* a resource enforcing that the thread calling unlock must be the same thread
      that owns the lock *)
 
   (* TODO: index this by the specific mutex! *)
-  Parameter mutex_locked : thread_idT -> mpred.
-  Declare Instance mutex_locked_timeless : Timeless1 mutex_locked.
-  Declare Instance mutex_locked_excl : Exclusive1 mutex_locked.
+  Parameter mutex_locked : gname -> thread_idT -> mpred.
+  Declare Instance mutex_locked_timeless : Timeless2 mutex_locked.
+  Declare Instance mutex_locked_excl : Exclusive2 mutex_locked.
 
   cpp.spec "std::__1::mutex::mutex()" as ctor_spec with
       (\this this
       \with R
       \pre ▷R
-      \post this |-> mutex_rep 1$m R ** mutex_token 1$m).
+      \post Exists g, this |-> mutex_rep 1$m g R ** mutex_token 1$m g).
 
   cpp.spec "std::__1::mutex::lock()" as lock_spec with
       (\this this
-      \prepost{q R} this |-> mutex_rep q R (* part of both pre and post *)
+      \prepost{q R g} this |-> mutex_rep q g R (* part of both pre and post *)
       \prepost{i} >={ L_TI } i
-      \pre mutex_token q
-      \post R ** mutex_locked i).
+      \pre mutex_token q g
+      \post R ** mutex_locked g i).
 
   cpp.spec "std::__1::mutex::try_lock()" as try_lock_spec with
       (\this this
-      \prepost{q R} this |-> mutex_rep q R (* part of both pre and post *)
+      \prepost{q R g} this |-> mutex_rep q g R (* part of both pre and post *)
       \prepost{i} >={ L_TI } i
-      \pre mutex_token q
-      \post{b}[Vbool b] if b then R ** mutex_locked i else mutex_token q).
+      \pre mutex_token q g
+      \post{b}[Vbool b] if b then R ** mutex_locked g i else mutex_token q g).
 
   cpp.spec "std::__1::mutex::unlock()" as unlock_spec with
       (\this this
-      \prepost{q R} this |-> mutex_rep q R (* part of both pre and post *)
+      \prepost{q R g} this |-> mutex_rep q g R (* part of both pre and post *)
       \prepost{i} >={ L_TI } i
-      \pre mutex_locked i
+      \pre mutex_locked g i
       \pre ▷R
-      \post mutex_token q).
+      \post mutex_token q g).
 
   cpp.spec "std::__1::mutex::~mutex()" as dtor_spec with
       (\this this
       \with R
-      \pre this |-> mutex_rep 1$m R ** mutex_token 1$m
+      \pre{g} this |-> mutex_rep 1$m g R ** mutex_token 1$m g
       \post R).
 
   cpp.spec "test()" as test_spec with
@@ -83,16 +83,14 @@ Section with_cpp.
       \prepost{i} >={ L_TI } i (* TODO: make this unnecessary? *)
       \post emp).
 
-  Declare Instance mutex_rep_typed : Typed2 "std::__1::mutex" mutex_rep.
+  Declare Instance mutex_rep_typed : Typed3 "std::__1::mutex" mutex_rep.
 
+  #[global] Declare Instance monpred_at_least_learnable I J PROP L : LearnEq1 (monPred_atleast (I := I) (J := J) (PROP := PROP) L).
+  
   Theorem test_ok : verify[module] test_spec.
   Proof. verify_spec; go.
-      iExists emp.  go. (* doesn't automatically split mutex_token *)
-      (* we could prove this without the splittable instance by manually
-        instantiating the fraction at each call to lock/unlock *)
-      iExists i.
+      iExists emp.
       go.
-   Fail progress iFrame.
-  Admitted.
+  Qed.
 
 End with_cpp.
