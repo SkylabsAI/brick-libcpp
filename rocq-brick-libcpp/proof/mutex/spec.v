@@ -23,7 +23,7 @@ Section with_cpp.
   Declare Instance mutex_rep_ascfrac : AsCFractional2 mutex_rep.
   Declare Instance mutex_rep_cfracvalid : CFracValid2 mutex_rep.
   Declare Instance mutex_rep_timeless : Timeless3 mutex_rep.
-    
+
   (* #[only(cfractional,timeless)] derive mutex_rep. *)
   (* TODO: index this by the specific mutex! Either via a mutex_gname or by making this a Rep *)
   Parameter mutex_token : cQp.t -> gname -> mpred.
@@ -86,7 +86,7 @@ Section with_cpp.
   Declare Instance mutex_rep_typed : Typed3 "std::__1::mutex" mutex_rep.
 
   #[global] Declare Instance monpred_at_least_learnable I J PROP L : LearnEq1 (monPred_atleast (I := I) (J := J) (PROP := PROP) L).
-  
+
   Theorem test_ok : verify[module] test_spec.
   Proof. verify_spec; go.
       iExists emp.

@@ -15,7 +15,7 @@ Section with_cpp.
 
   (*Parameter mutex_token : cQp.t -> mpred.*)
 
-  
+
 #[global] Declare Instance semaphoreR_cfrac : CFractional1 semaphoreR.
 #[global] Declare Instance semaphoreR_ascfrac : AsCFractional1 semaphoreR.
 #[global] Declare Instance semaphoreR_cfracvalid : CFracValid1 semaphoreR.
@@ -42,7 +42,7 @@ Section with_cpp.
        \pre{Q} acquire_ac g Q
        \post Q).
 
-  Definition try_acquire_ac g Q : mpred := 
+  Definition try_acquire_ac g Q : mpred :=
     AU <{ ∃∃ n, semaphore_Val g n }> @ top, empty
        <{ semaphore_Val g (if bool_decide (n = 0) then n else n-1), COMM Q $ bool_decide (n = 0) }>.
   Hint Opaque try_acquire_ac : br_opacity.
@@ -73,7 +73,7 @@ Section with_cpp.
 
   cpp.spec "std::__1::counting_semaphore<1l>::~counting_semaphore()" as dtor_spec with
       (\this this
-        \pre{g} this |-> semaphoreR 1$m g 
+        \pre{g} this |-> semaphoreR 1$m g
         \post emp).
 
   cpp.spec "test()" as test_spec with
@@ -136,7 +136,7 @@ Section with_cpp.
   Qed.
   Hint Resolve rel_ac_C : br_hints.
 
-  (* TODO try_acquire_ac_C  *) 
+  (* TODO try_acquire_ac_C  *)
 
   Theorem test_ok : verify[module] test_spec.
   Proof using MOD.
