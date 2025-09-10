@@ -85,7 +85,7 @@ Section with_cpp.
   #[global] Declare Instance inst v n : Refine1 true true (Vint v = Vnat n) ([n = Z.to_nat v]).
   #[global] Declare Instance semaphoreR_learnable : LearnEqF1 semaphoreR.
 
-  Theorem release_ok : verify[module] release_spec.
+  Theorem release_ok : verify?[module] release_spec.
   Proof using MOD.
     verify_spec.
     go.
