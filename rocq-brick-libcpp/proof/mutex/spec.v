@@ -15,6 +15,11 @@ Section with_cpp.
   Declare Instance thread_idT_inh : Inhabited thread_idT.
   Canonical Structure thread_idT_bi_index : biIndex := BiIndex thread_idT _ eq _.
   Parameter L_TI : ti -ml> thread_idT_bi_index.
+  (* TODO: bikeshedding about the names + package [>={ L_TI }] into a notation at least. *)
+  (* TODO: theorem [|-- ∃ i, >={ L_TI } i], maybe agreement (since the order is equality, and that should be persistent? *)
+  (* TODO: show how these modalities show up in Thread::create() and Thread::get_id(), so we can refine. *)
+  (* TODO: this should move to some prelude. And L_TI needs to depend on some typeclass assumption that constrains [ti], just like we do in
+  [fmdeps/cpp2v/coq-bluerock-nova-interface/theories/predicates/pred.v]. *)
 
   Context  `{MOD : test_cpp.module ⊧ σ}. (* σ is the whole program *)
 
@@ -26,6 +31,7 @@ Section with_cpp.
 
   (* #[only(cfractional,timeless)] derive mutex_rep. *)
   (* TODO: index this by the specific mutex! Either via a mutex_gname or by making this a Rep *)
+  (* TODO: why is this separate from [mutex_rep] *)
   Parameter mutex_token : cQp.t -> gname -> mpred.
   Declare Instance mutex_token_cfrac : CFractional1 mutex_token.
   Declare Instance mutex_token_ascfrac : AsCFractional1 mutex_token.
@@ -38,6 +44,21 @@ Section with_cpp.
   #[global] Declare Instance mutex_rep_learnable : LearnEqF2 mutex_rep.
   (* a resource enforcing that the thread calling unlock must be the same thread
      that owns the lock *)
+  (* TODO: maybe a bigger test demonstrating the enforcement?
+  minimal version: this fails (fill in the obvious stuff)
+
+    \persist{i} >={ L_TI } i
+    \pre{j} mutex_locked g j
+    test_unlock(std::mutex & m) {
+      m.unlock();
+    }
+
+    this succeeds:
+
+    \persist{i} >={ L_TI } i
+    \pre mutex_locked g i
+    same test_unlock
+   *)
 
   (* TODO: index this by the specific mutex! *)
   Parameter mutex_locked : gname -> thread_idT -> mpred.
@@ -53,7 +74,7 @@ Section with_cpp.
   cpp.spec "std::__1::mutex::lock()" as lock_spec with
       (\this this
       \prepost{q R g} this |-> mutex_rep q g R (* part of both pre and post *)
-      \prepost{i} >={ L_TI } i
+      \persist{i} >={ L_TI } i
       \pre mutex_token q g
       \post R ** mutex_locked g i).
 
@@ -67,7 +88,7 @@ Section with_cpp.
   cpp.spec "std::__1::mutex::unlock()" as unlock_spec with
       (\this this
       \prepost{q R g} this |-> mutex_rep q g R (* part of both pre and post *)
-      \prepost{i} >={ L_TI } i
+      \persist{i} >={ L_TI } i
       \pre mutex_locked g i
       \pre ▷R
       \post mutex_token q g).
