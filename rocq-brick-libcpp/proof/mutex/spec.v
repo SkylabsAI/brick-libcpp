@@ -42,7 +42,7 @@ Section with_cpp.
   (* TODO: index this by the specific mutex! *)
   Parameter mutex_locked : gname -> thread_idT -> mpred.
   Declare Instance mutex_locked_timeless : Timeless2 mutex_locked.
-  Declare Instance mutex_locked_excl : Exclusive2 mutex_locked.
+  Declare Instance mutex_locked_excl g : Exclusive1 (mutex_locked g).
 
   cpp.spec "std::__1::mutex::mutex()" as ctor_spec with
       (\this this
