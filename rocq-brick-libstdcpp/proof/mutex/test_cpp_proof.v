@@ -1,5 +1,5 @@
 Require Import bluerock.auto.cpp.proof.
-Require Import bluerock.brick.libcpp.mutex.test_cpp.
+Require Import bluerock.brick.libstdcpp.mutex.test_cpp.
 
 Section with_cpp.
   Context `{Σ : cpp_logic}.
@@ -14,31 +14,31 @@ Section with_cpp.
 
   #[global] Declare Instance mutex_rep_learnable : LearnEqF1 mutex_rep.
 
-  cpp.spec "std::__1::mutex::mutex()" as ctor_spec with
+  cpp.spec "std::mutex::mutex()" as ctor_spec with
       (\this this
       \with R
       \pre ▷R
       \post this |-> mutex_rep 1$m R ** mutex_token 1$m).
 
-  cpp.spec "std::__1::mutex::lock()" as lock_spec with
+  cpp.spec "std::mutex::lock()" as lock_spec with
       (\this this
       \prepost{q R} this |-> mutex_rep q R (* part of both pre and post *)
       \pre mutex_token q
       \post R).
 
-  cpp.spec "std::__1::mutex::try_lock()" as try_lock_spec with
+  cpp.spec "std::mutex::try_lock()" as try_lock_spec with
       (\this this
       \prepost{q R} this |-> mutex_rep q R (* part of both pre and post *)
       \pre mutex_token q
       \post{b}[Vbool b] if b then R else mutex_token q).
 
-  cpp.spec "std::__1::mutex::unlock()" as unlock_spec with
+  cpp.spec "std::mutex::unlock()" as unlock_spec with
       (\this this
       \prepost{q R} this |-> mutex_rep q R (* part of both pre and post *)
       \pre ▷R
       \post mutex_token q).
 
-  cpp.spec "std::__1::mutex::~mutex()" as dtor_spec with
+  cpp.spec "std::mutex::~mutex()" as dtor_spec with
       (\this this
       \with R
       \pre this |-> mutex_rep 1$m R ** mutex_token 1$m
@@ -47,7 +47,7 @@ Section with_cpp.
   cpp.spec "test()" as test_spec with
       (\post emp).
 
-  Declare Instance mutex_rep_typed : Typed2 "std::__1::mutex" mutex_rep.
+  Declare Instance mutex_rep_typed : Typed2 "std::mutex" mutex_rep.
 
   Theorem test_ok : verify[module] test_spec.
   Proof. verify_spec; go.

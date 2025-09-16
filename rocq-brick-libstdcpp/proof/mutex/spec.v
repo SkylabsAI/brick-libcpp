@@ -4,7 +4,7 @@ Require Import bluerock.bi.weakly_objective.
 Require Import bluerock.auto.cpp.weakly_local_with.
 
 Require Import bluerock.auto.cpp.proof.
-Require Import bluerock.brick.libcpp.mutex.test_cpp. (* TODO: this should be replaced with [inc_hpp] *)
+Require Import bluerock.brick.libstdcpp.mutex.test_cpp. (* TODO: this should be replaced with [inc_hpp] *)
 
 Set Debug "-backtrace". (* Paolo: Workaround for now-fixed bug.*)
 Section with_cpp.
@@ -12,9 +12,12 @@ Section with_cpp.
 
   (* Generic infrastructure. TODO lift *)
   Parameter thread_idT : Type.
-  Declare Instance thread_idT_inh : Inhabited thread_idT.
+  #[global] Declare Instance thread_idT_inh : Inhabited thread_idT.
   Canonical Structure thread_idT_bi_index : biIndex := BiIndex thread_idT _ eq _.
   Parameter L_TI : ti -ml> thread_idT_bi_index.
+  #[global] Declare Instance monpred_at_least_learnable I J PROP L
+    : LearnEq1 (monPred_atleast (I := I) (J := J) (PROP := PROP) L).
+
   (* TODO: bikeshedding about the names + package [>={ L_TI }] into a notation at least. *)
   (* TODO: theorem [|-- ∃ i, >={ L_TI } i], maybe agreement (since the order is equality, and that should be persistent? *)
   (* TODO: show how these modalities show up in Thread::create() and Thread::get_id(), so we can refine. *)
@@ -65,27 +68,27 @@ Section with_cpp.
   Declare Instance mutex_locked_timeless : Timeless2 mutex_locked.
   Declare Instance mutex_locked_excl g : Exclusive1 (mutex_locked g).
 
-  cpp.spec "std::__1::mutex::mutex()" as ctor_spec with
+  cpp.spec "std::mutex::mutex()" as ctor_spec with
       (\this this
       \with R
       \pre ▷R
       \post Exists g, this |-> mutex_rep 1$m g R ** mutex_token 1$m g).
 
-  cpp.spec "std::__1::mutex::lock()" as lock_spec with
+  cpp.spec "std::mutex::lock()" as lock_spec with
       (\this this
       \prepost{q R g} this |-> mutex_rep q g R (* part of both pre and post *)
       \persist{i} >={ L_TI } i
       \pre mutex_token q g
       \post R ** mutex_locked g i).
 
-  cpp.spec "std::__1::mutex::try_lock()" as try_lock_spec with
+  cpp.spec "std::mutex::try_lock()" as try_lock_spec with
       (\this this
       \prepost{q R g} this |-> mutex_rep q g R (* part of both pre and post *)
       \prepost{i} >={ L_TI } i
       \pre mutex_token q g
       \post{b}[Vbool b] if b then R ** mutex_locked g i else mutex_token q g).
 
-  cpp.spec "std::__1::mutex::unlock()" as unlock_spec with
+  cpp.spec "std::mutex::unlock()" as unlock_spec with
       (\this this
       \prepost{q R g} this |-> mutex_rep q g R (* part of both pre and post *)
       \persist{i} >={ L_TI } i
@@ -93,7 +96,7 @@ Section with_cpp.
       \pre ▷R
       \post mutex_token q g).
 
-  cpp.spec "std::__1::mutex::~mutex()" as dtor_spec with
+  cpp.spec "std::mutex::~mutex()" as dtor_spec with
       (\this this
       \with R
       \pre{g} this |-> mutex_rep 1$m g R ** mutex_token 1$m g
@@ -104,9 +107,6 @@ Section with_cpp.
       \prepost{i} >={ L_TI } i (* TODO: make this unnecessary? *)
       \post emp).
 
-  Declare Instance mutex_rep_typed : Typed3 "std::__1::mutex" mutex_rep.
-
-  #[global] Declare Instance monpred_at_least_learnable I J PROP L : LearnEq1 (monPred_atleast (I := I) (J := J) (PROP := PROP) L).
 
   Theorem test_ok : verify[module] test_spec.
   Proof. verify_spec; go.

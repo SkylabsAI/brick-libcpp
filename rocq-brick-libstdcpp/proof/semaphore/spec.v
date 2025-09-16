@@ -1,5 +1,5 @@
 Require Import bluerock.auto.cpp.proof.
-Require Import bluerock.brick.libcpp.semaphore.test_cpp. (* TODO: should be changed to [inc_hpp] *)
+Require Import bluerock.brick.libstdcpp.semaphore.test_cpp. (* TODO: should be changed to [inc_hpp] *)
 Set Debug "-backtrace". (* Paolo: Workaround for now-fixed bug.*)
 
 Import auto_frac auto_pick_frac.
@@ -30,13 +30,13 @@ Section with_cpp.
   Hint Opaque acquire_ac : br_opacity.
 
   (* write this as a logically atomic triple *)
-  cpp.spec "std::__1::counting_semaphore<1l>::counting_semaphore(long)" as ctor_spec with
+  cpp.spec "std::counting_semaphore<1l>::counting_semaphore(long)" as ctor_spec with
       (\this this
        \arg{desired} "desired" (Vnat desired)
        \post Exists g, this |-> semaphoreR 1$m g ** semaphore_Val g desired).
   (* note that technically mutex needs to know which thread holds it *)
 
-  cpp.spec "std::__1::counting_semaphore<1l>::acquire()" as acquire_spec with
+  cpp.spec "std::counting_semaphore<1l>::acquire()" as acquire_spec with
       (\this this
        \prepost{q g} this |-> semaphoreR q g
        \pre{Q} acquire_ac g Q
@@ -49,7 +49,7 @@ Section with_cpp.
 
 
 
-  cpp.spec "std::__1::counting_semaphore<1l>::try_acquire()" as try_lock_spec with
+  cpp.spec "std::counting_semaphore<1l>::try_acquire()" as try_lock_spec with
       (\this this
          \prepost{q g} this |-> semaphoreR q g (* part of both pre and post *)
          \pre{Q} try_acquire_ac g Q
@@ -62,16 +62,14 @@ Section with_cpp.
        << semaphore_Val g (n+update), COMM Q  >>.
   Hint Opaque release_ac : br_opacity.
 
-  cpp.spec "std::__1::counting_semaphore<1l>::release(long)" as release_spec with
+  cpp.spec "std::counting_semaphore<1l>::release(long)" as release_spec with
       (\this this
         \arg{update} "update" (Vnat update)
         \prepost{q g} this |-> semaphoreR q g
         \pre{Q} release_ac g Q update
        \post Q).
 
-  cpp.spec "std::__1::__atomic_semaphore_base::release(long)" inline.
-
-  cpp.spec "std::__1::counting_semaphore<1l>::~counting_semaphore()" as dtor_spec with
+  cpp.spec "std::counting_semaphore<1l>::~counting_semaphore()" as dtor_spec with
       (\this this
         \pre{g} this |-> semaphoreR 1$m g
         \post emp).
@@ -79,7 +77,6 @@ Section with_cpp.
   cpp.spec "test()" as test_spec with
       (\post emp).
 
-  Declare Instance semaphoreR_typed : Typed2 "std::__1::counting_semaphore<1l>" semaphoreR.
 
   (* LHS learns RHS *)
   #[global] Declare Instance inst v n : Refine1 true true (Vint v = Vnat n) ([n = Z.to_nat v]).
