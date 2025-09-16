@@ -6,8 +6,8 @@
 
 (include_subdirs qualified)
 (coq.theory
- (name bluerock.brick.libcpp) ; logical path of this library
- (package rocq-brick-libcpp)
+ (name bluerock.brick.libstdcpp) ; logical path of this library
+ (package rocq-brick-libstdcpp)
  (theories
   Lens Lens.Elpi Equations Equations.Prop Equations.Type
   Stdlib
