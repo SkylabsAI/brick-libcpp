@@ -7,7 +7,7 @@ Import auto_frac auto_pick_frac.
 Section with_cpp.
 
   Context `{Σ : cpp_logic}.
-  Context  `{MOD : test_cpp.module ⊧ σ}. (* σ is the whole program *)
+  Context  `{MOD : test_cpp.source ⊧ σ}. (* σ is the whole program *)
 
   Parameter semaphoreR : cQp.t -> gname -> Rep.
   (* #[only(cfractional,timeless)] derive semaphoreR. *)
@@ -15,13 +15,12 @@ Section with_cpp.
 
   (*Parameter mutex_token : cQp.t -> mpred.*)
 
-
-#[global] Declare Instance semaphoreR_cfrac : CFractional1 semaphoreR.
-#[global] Declare Instance semaphoreR_ascfrac : AsCFractional1 semaphoreR.
-#[global] Declare Instance semaphoreR_cfracvalid : CFracValid1 semaphoreR.
-#[global] Declare Instance semaphoreR_timeless : Timeless2 semaphoreR.
-#[global] Declare Instance semaphore_Val_affine : Affine2 semaphore_Val.
-(* we might now have semaphore implemented with atomics *)
+  #[global] Declare Instance semaphoreR_cfrac : CFractional1 semaphoreR.
+  #[global] Declare Instance semaphoreR_ascfrac : AsCFractional1 semaphoreR.
+  #[global] Declare Instance semaphoreR_cfracvalid : CFracValid1 semaphoreR.
+  #[global] Declare Instance semaphoreR_timeless : Timeless2 semaphoreR.
+  #[global] Declare Instance semaphore_Val_affine : Affine2 semaphore_Val.
+  (* we might now have semaphore implemented with atomics *)
 
   Definition acquire_ac t Q  : mpred :=
     AC << ∀ n : nat, semaphore_Val t n >> @ ⊤, ∅
@@ -30,13 +29,13 @@ Section with_cpp.
   Hint Opaque acquire_ac : br_opacity.
 
   (* write this as a logically atomic triple *)
-  cpp.spec "std::__1::counting_semaphore<1l>::counting_semaphore(long)" as ctor_spec with
+  cpp.spec "std::counting_semaphore<1l>::counting_semaphore(long)" as ctor_spec with
       (\this this
        \arg{desired} "desired" (Vnat desired)
        \post Exists g, this |-> semaphoreR 1$m g ** semaphore_Val g desired).
   (* note that technically mutex needs to know which thread holds it *)
 
-  cpp.spec "std::__1::counting_semaphore<1l>::acquire()" as acquire_spec with
+  cpp.spec "std::counting_semaphore<1l>::acquire()" as acquire_spec with
       (\this this
        \prepost{q g} this |-> semaphoreR q g
        \pre{Q} acquire_ac g Q
@@ -49,7 +48,7 @@ Section with_cpp.
 
 
 
-  cpp.spec "std::__1::counting_semaphore<1l>::try_acquire()" as try_lock_spec with
+  cpp.spec "std::counting_semaphore<1l>::try_acquire()" as try_lock_spec with
       (\this this
          \prepost{q g} this |-> semaphoreR q g (* part of both pre and post *)
          \pre{Q} try_acquire_ac g Q
@@ -62,16 +61,16 @@ Section with_cpp.
        << semaphore_Val g (n+update), COMM Q  >>.
   Hint Opaque release_ac : br_opacity.
 
-  cpp.spec "std::__1::counting_semaphore<1l>::release(long)" as release_spec with
+  cpp.spec "std::counting_semaphore<1l>::release(long)" as release_spec with
       (\this this
         \arg{update} "update" (Vnat update)
         \prepost{q g} this |-> semaphoreR q g
         \pre{Q} release_ac g Q update
        \post Q).
 
-  cpp.spec "std::__1::__atomic_semaphore_base::release(long)" inline.
+  cpp.spec "std::__atomic_semaphore_base::release(long)" inline.
 
-  cpp.spec "std::__1::counting_semaphore<1l>::~counting_semaphore()" as dtor_spec with
+  cpp.spec "std::counting_semaphore<1l>::~counting_semaphore()" as dtor_spec with
       (\this this
         \pre{g} this |-> semaphoreR 1$m g
         \post emp).
@@ -85,7 +84,7 @@ Section with_cpp.
   #[global] Declare Instance inst v n : Refine1 true true (Vint v = Vnat n) ([n = Z.to_nat v]).
   #[global] Declare Instance semaphoreR_learnable : LearnEqF1 semaphoreR.
 
-  Theorem release_ok : verify?[module] release_spec.
+  Theorem release_ok : verify?[source] release_spec.
   Proof using MOD.
     verify_spec.
     go.
@@ -138,7 +137,7 @@ Section with_cpp.
 
   (* TODO try_acquire_ac_C  *)
 
-  Theorem test_ok : verify[module] test_spec.
+  Theorem test_ok : verify[source] test_spec.
   Proof using MOD.
     verify_spec.
     go.
