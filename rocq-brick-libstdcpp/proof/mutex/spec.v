@@ -118,3 +118,54 @@ Section with_cpp.
   Qed.
 
 End with_cpp.
+End mutex.
+
+Module recursive_mutex.
+Section with_cpp.
+  Context `{Σ : cpp_logic} `{MOD : source ⊧ σ}.
+
+  (* recursive mutex -- ownership of the class. *)
+  Parameter R : gname -> cQp.t -> mpred -> Rep.
+  #[only(cfractional,timeless,type_ptr="std::recursive_mutex")] derive R.
+
+  (* #[only(cfractional,timeless)] derive mutex_rep. *)
+  (** <<token γ q>> if <<q = 1>>, then the mutex is not locked and therefore can be destroyed *)
+  Parameter token : gname -> cQp.t -> mpred.
+  #[only(cfracsplittable,timeless)] derive token.
+
+  (** <<locked γ th n>> <<th>> owns the mutex <<γ>> <<n>> times. *)
+  Parameter locked : gname -> thread_idT -> nat -> mpred.
+  Declare Instance mutex_locked_timeless : Timeless3 locked.
+  (* Question:
+     - locked g th 1 ** locked g th 1 -|- locked g th 2
+   *)
+  cpp.spec "std::recursive_mutex::recursive_mutex()" as ctor_spec with
+    (\this this
+     \pre{r} ▷r
+     \post Exists g, this |-> R g 1$m r ** token g 1$m).
+
+  Parameter can_borrow : gname -> thread_idT -> mpred.
+
+  (*
+  R γ q r ** current_thread th |- R γ q r ** locked γ th 0
+  ^^ this statement allows us to have: <<locked γ th 0 ** locked γ th 0>>
+
+  R γ q r ** can_borrow γ th ** locked γ th (S n) |-- R γ q r ** r
+
+  - clients : gname -> gmap thread_idT nat -> mpred
+  - "locked" becomes ownership of a singleton of this.
+
+  R γ q r ** clients γ s ** current_thread th ** [| th ∉ s |]
+  |-- locked γ tr 0 ** clients γ ({ th } ∪ s) ** R γ q r
+  *)
+
+  cpp.spec "std::recursive_mutex::lock()" as lock_spec with
+      (\this this
+       \prepost{q r g} this |-> R g q r (* part of both pre and post *)
+       \persist{i} current_thread i
+       \pre token g q
+       \pre{n} locked g i n
+       \post locked g i (S n)).
+
+End with_cpp.
+End recursive_mutex.
