@@ -3,29 +3,38 @@ Require Import bluerock.bi.tls_modalities_rep.
 Require Import bluerock.bi.weakly_objective.
 Require Import bluerock.auto.cpp.weakly_local_with.
 
-Require Import bluerock.auto.cpp.proof.
+Require Import bluerock.auto.cpp.prelude.proof.
 Require Import bluerock.brick.libstdcpp.mutex.test_cpp. (* TODO: this should be replaced with [inc_hpp] *)
 
-Set Debug "-backtrace". (* Paolo: Workaround for now-fixed bug.*)
 Section with_cpp.
   Context `{Σ : !cpp_logic ti Σ0}.
 
-  (* Generic infrastructure. TODO lift *)
+  (* Generic infrastructure. TODO lift this to a thread_id.v file.
+     NOTE: this needs to be placed inside of a typeclass to be sound
+   *)
   Parameter thread_idT : Type.
   #[global] Declare Instance thread_idT_inh : Inhabited thread_idT.
   Canonical Structure thread_idT_bi_index : biIndex := BiIndex thread_idT _ eq _.
   Parameter L_TI : ti -ml> thread_idT_bi_index.
   #[global] Declare Instance monpred_at_least_learnable I J PROP L
     : LearnEq1 (monPred_atleast (I := I) (J := J) (PROP := PROP) L).
-
+  Notation current_thread i := (>={ L_TI } i)%I.
   (* TODO: bikeshedding about the names + package [>={ L_TI }] into a notation at least. *)
   (* TODO: theorem [|-- ∃ i, >={ L_TI } i], maybe agreement (since the order is equality, and that should be persistent? *)
   (* TODO: show how these modalities show up in Thread::create() and Thread::get_id(), so we can refine. *)
   (* TODO: this should move to some prelude. And L_TI needs to depend on some typeclass assumption that constrains [ti], just like we do in
-  [fmdeps/cpp2v/coq-bluerock-nova-interface/theories/predicates/pred.v]. *)
+     [fmdeps/cpp2v/coq-bluerock-nova-interface/theories/predicates/pred.v]. *)
 
+End with_cpp.
+Notation current_thread i := (>={ L_TI } i)%I.
+
+Set Debug "-backtrace". (* Paolo: Workaround for now-fixed bug.*)
+Module mutex.
+Section with_cpp.
+  Context `{Σ : !cpp_logic ti Σ0}.
   Context  `{MOD : test_cpp.source ⊧ σ}. (* σ is the whole program *)
 
+  (** <<mutex_rep q γ R>> <<q>> ownership of the mutex <<γ>> with lock invariant <<R>>. *)
   Parameter mutex_rep : cQp.t -> gname -> mpred -> Rep.
   #[global] Declare Instance mutex_rep_typed : Typed3 "std::mutex" mutex_rep.
   #[global] Declare Instance mutex_rep_cfrac : CFractional2 mutex_rep.
@@ -34,14 +43,9 @@ Section with_cpp.
   #[global] Declare Instance mutex_rep_timeless : Timeless3 mutex_rep.
 
   (* #[only(cfractional,timeless)] derive mutex_rep. *)
-  (* TODO: index this by the specific mutex! Either via a mutex_gname or by making this a Rep *)
-  (* TODO: why is this separate from [mutex_rep] *)
-  Parameter mutex_token : cQp.t -> gname -> mpred.
-  #[global] Declare Instance mutex_token_cfrac : CFractional1 mutex_token.
-  #[global] Declare Instance mutex_token_ascfrac : AsCFractional1 mutex_token.
-  #[global] Declare Instance mutex_token_cfracvalid : CFracValid1 mutex_token.
-  #[global] Declare Instance mutex_token_timeless : Timeless2 mutex_token.
-  (* #[only(cfractional)] derive mutex_token. *)
+  (** <<mutex_token γ q>> if <<q = 1>>, then the mutex is not locked and therefore can be destroyed *)
+  Parameter mutex_token : gname -> cQp.t -> mpred.
+  #[only(cfracsplittable,timeless)] derive mutex_token.
 
   Import auto_frac auto_pick_frac.
 
@@ -64,7 +68,7 @@ Section with_cpp.
     same test_unlock
    *)
 
-  (* TODO: index this by the specific mutex! *)
+  (** <<mutex_locked γ th>> means that thread <<th>> currently owns the mutex <<γ>>. *)
   Parameter mutex_locked : gname -> thread_idT -> mpred.
   Declare Instance mutex_locked_timeless : Timeless2 mutex_locked.
   Declare Instance mutex_locked_excl g : Exclusive1 (mutex_locked g).
@@ -73,41 +77,39 @@ Section with_cpp.
       (\this this
       \with R
       \pre ▷R
-      \post Exists g, this |-> mutex_rep 1$m g R ** mutex_token 1$m g).
+      \post Exists g, this |-> mutex_rep 1$m g R ** mutex_token g 1$m).
 
   cpp.spec "std::mutex::lock()" as lock_spec with
       (\this this
       \prepost{q R g} this |-> mutex_rep q g R (* part of both pre and post *)
-      \persist{i} >={ L_TI } i
-      \pre mutex_token q g
+      \persist{i} current_thread i
+      \pre mutex_token g q
       \post R ** mutex_locked g i).
 
   cpp.spec "std::mutex::try_lock()" as try_lock_spec with
       (\this this
       \prepost{q R g} this |-> mutex_rep q g R (* part of both pre and post *)
-      \prepost{i} >={ L_TI } i
-      \pre mutex_token q g
-      \post{b}[Vbool b] if b then R ** mutex_locked g i else mutex_token q g).
+      \prepost{i} current_thread i
+      \pre mutex_token g q
+      \post{b}[Vbool b] if b then R ** mutex_locked g i else mutex_token g q).
 
   cpp.spec "std::mutex::unlock()" as unlock_spec with
       (\this this
       \prepost{q R g} this |-> mutex_rep q g R (* part of both pre and post *)
-      \persist{i} >={ L_TI } i
+      \persist{i} current_thread i
       \pre mutex_locked g i
       \pre ▷R
-      \post mutex_token q g).
+      \post mutex_token g q).
 
   cpp.spec "std::mutex::~mutex()" as dtor_spec with
       (\this this
       \with R
-      \pre{g} this |-> mutex_rep 1$m g R ** mutex_token 1$m g
+      \pre{g} this |-> mutex_rep 1$m g R ** mutex_token g 1$m
       \post R).
 
   cpp.spec "test()" as test_spec with
-      (
-      \prepost{i} >={ L_TI } i (* TODO: make this unnecessary? *)
+     (\prepost{i} current_thread i (* TODO: make this unnecessary? *)
       \post emp).
-
 
   Theorem test_ok : verify[source] test_spec.
   Proof. verify_spec; go.
