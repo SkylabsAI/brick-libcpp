@@ -7,7 +7,7 @@ Import auto_frac auto_pick_frac.
 Section with_cpp.
 
   Context `{Σ : cpp_logic}.
-  Context  `{MOD : test_cpp.module ⊧ σ}. (* σ is the whole program *)
+  Context  `{MOD : test_cpp.source ⊧ σ}. (* σ is the whole program *)
 
   Parameter semaphoreR : cQp.t -> gname -> Rep.
   (* #[only(cfractional,timeless)] derive semaphoreR. *)
@@ -15,13 +15,13 @@ Section with_cpp.
 
   (*Parameter mutex_token : cQp.t -> mpred.*)
 
-
-#[global] Declare Instance semaphoreR_cfrac : CFractional1 semaphoreR.
-#[global] Declare Instance semaphoreR_ascfrac : AsCFractional1 semaphoreR.
-#[global] Declare Instance semaphoreR_cfracvalid : CFracValid1 semaphoreR.
-#[global] Declare Instance semaphoreR_timeless : Timeless2 semaphoreR.
-#[global] Declare Instance semaphore_Val_affine : Affine2 semaphore_Val.
-(* we might now have semaphore implemented with atomics *)
+  #[global] Declare Instance semaphoreR_typed : Typed2 "std::counting_semaphore<1l>" semaphoreR.
+  #[global] Declare Instance semaphoreR_cfrac : CFractional1 semaphoreR.
+  #[global] Declare Instance semaphoreR_ascfrac : AsCFractional1 semaphoreR.
+  #[global] Declare Instance semaphoreR_cfracvalid : CFracValid1 semaphoreR.
+  #[global] Declare Instance semaphoreR_timeless : Timeless2 semaphoreR.
+  #[global] Declare Instance semaphore_Val_affine : Affine2 semaphore_Val.
+  (* we might now have semaphore implemented with atomics *)
 
   Definition acquire_ac t Q  : mpred :=
     AC << ∀ n : nat, semaphore_Val t n >> @ ⊤, ∅
@@ -82,7 +82,7 @@ Section with_cpp.
   #[global] Declare Instance inst v n : Refine1 true true (Vint v = Vnat n) ([n = Z.to_nat v]).
   #[global] Declare Instance semaphoreR_learnable : LearnEqF1 semaphoreR.
 
-  Theorem release_ok : verify?[module] release_spec.
+  Theorem release_ok : verify?[source] release_spec.
   Proof using MOD.
     verify_spec.
     go.
@@ -135,7 +135,7 @@ Section with_cpp.
 
   (* TODO try_acquire_ac_C  *)
 
-  Theorem test_ok : verify[module] test_spec.
+  Theorem test_ok : verify[source] test_spec.
   Proof using MOD.
     verify_spec.
     go.

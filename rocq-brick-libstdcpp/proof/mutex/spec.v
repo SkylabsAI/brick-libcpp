@@ -24,22 +24,23 @@ Section with_cpp.
   (* TODO: this should move to some prelude. And L_TI needs to depend on some typeclass assumption that constrains [ti], just like we do in
   [fmdeps/cpp2v/coq-bluerock-nova-interface/theories/predicates/pred.v]. *)
 
-  Context  `{MOD : test_cpp.module ⊧ σ}. (* σ is the whole program *)
+  Context  `{MOD : test_cpp.source ⊧ σ}. (* σ is the whole program *)
 
   Parameter mutex_rep : cQp.t -> gname -> mpred -> Rep.
-  Declare Instance mutex_rep_cfrac : CFractional2 mutex_rep.
-  Declare Instance mutex_rep_ascfrac : AsCFractional2 mutex_rep.
-  Declare Instance mutex_rep_cfracvalid : CFracValid2 mutex_rep.
-  Declare Instance mutex_rep_timeless : Timeless3 mutex_rep.
+  #[global] Declare Instance mutex_rep_typed : Typed3 "std::mutex" mutex_rep.
+  #[global] Declare Instance mutex_rep_cfrac : CFractional2 mutex_rep.
+  #[global] Declare Instance mutex_rep_ascfrac : AsCFractional2 mutex_rep.
+  #[global] Declare Instance mutex_rep_cfracvalid : CFracValid2 mutex_rep.
+  #[global] Declare Instance mutex_rep_timeless : Timeless3 mutex_rep.
 
   (* #[only(cfractional,timeless)] derive mutex_rep. *)
   (* TODO: index this by the specific mutex! Either via a mutex_gname or by making this a Rep *)
   (* TODO: why is this separate from [mutex_rep] *)
   Parameter mutex_token : cQp.t -> gname -> mpred.
-  Declare Instance mutex_token_cfrac : CFractional1 mutex_token.
-  Declare Instance mutex_token_ascfrac : AsCFractional1 mutex_token.
-  Declare Instance mutex_token_cfracvalid : CFracValid1 mutex_token.
-  Declare Instance mutex_token_timeless : Timeless2 mutex_token.
+  #[global] Declare Instance mutex_token_cfrac : CFractional1 mutex_token.
+  #[global] Declare Instance mutex_token_ascfrac : AsCFractional1 mutex_token.
+  #[global] Declare Instance mutex_token_cfracvalid : CFracValid1 mutex_token.
+  #[global] Declare Instance mutex_token_timeless : Timeless2 mutex_token.
   (* #[only(cfractional)] derive mutex_token. *)
 
   Import auto_frac auto_pick_frac.
@@ -108,7 +109,7 @@ Section with_cpp.
       \post emp).
 
 
-  Theorem test_ok : verify[module] test_spec.
+  Theorem test_ok : verify[source] test_spec.
   Proof. verify_spec; go.
       iExists emp.
       go.
