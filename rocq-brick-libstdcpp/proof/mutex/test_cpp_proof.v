@@ -1,5 +1,5 @@
 Require Import bluerock.auto.cpp.proof.
-Require Import bluerock.brick.libcpp.mutex.test_cpp.
+Require Import bluerock.brick.libstdcpp.mutex.test_cpp.
 
 Section with_cpp.
   Context `{Σ : cpp_logic}.

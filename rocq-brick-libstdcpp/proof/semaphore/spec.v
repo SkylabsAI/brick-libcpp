@@ -1,5 +1,5 @@
 Require Import bluerock.auto.cpp.proof.
-Require Import bluerock.brick.libcpp.semaphore.test_cpp. (* TODO: should be changed to [inc_hpp] *)
+Require Import bluerock.brick.libstdcpp.semaphore.test_cpp. (* TODO: should be changed to [inc_hpp] *)
 Set Debug "-backtrace". (* Paolo: Workaround for now-fixed bug.*)
 
 Import auto_frac auto_pick_frac.

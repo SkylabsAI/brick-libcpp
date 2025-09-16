@@ -4,7 +4,7 @@ Require Import bluerock.bi.weakly_objective.
 Require Import bluerock.auto.cpp.weakly_local_with.
 
 Require Import bluerock.auto.cpp.proof.
-Require Import bluerock.brick.libcpp.mutex.test_cpp. (* TODO: this should be replaced with [inc_hpp] *)
+Require Import bluerock.brick.libstdcpp.mutex.test_cpp. (* TODO: this should be replaced with [inc_hpp] *)
 
 Set Debug "-backtrace". (* Paolo: Workaround for now-fixed bug.*)
 Section with_cpp.
