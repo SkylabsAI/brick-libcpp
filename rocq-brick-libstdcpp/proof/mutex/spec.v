@@ -104,8 +104,13 @@ Module recursive_mutex.
 Section with_cpp.
   Context `{Σ : cpp_logic} `{MOD : source ⊧ σ}.
 
+  
+
+(* NOTE: Invariant used to protect resource [r]
+    inv (r \\// exists th n, locked th (S n)) *)
+
   (* recursive mutex -- ownership of the class. *)
-  Parameter R : gname -> cQp.t -> mpred -> Rep.
+  Parameter R : gname -> cQp.t -> Rep.
   #[only(cfractional,timeless,type_ptr="std::recursive_mutex")] derive R.
 
   (* #[only(cfractional,timeless)] derive mutex_rep. *)
@@ -113,39 +118,63 @@ Section with_cpp.
   Parameter token : gname -> cQp.t -> mpred.
   #[only(cfracsplittable,timeless)] derive token.
 
+  (* the mask of recursive_mutex *)
+  Definition mask := nroot .@ "std" .@ "recursive_mutex".
+
   (** <<locked γ th n>> <<th>> owns the mutex <<γ>> <<n>> times. *)
   Parameter locked : gname -> thread_idT -> nat -> mpred.
   Declare Instance mutex_locked_timeless : Timeless3 locked.
-  (* Question:
-     - locked g th 1 ** locked g th 1 -|- locked g th 2
-   *)
+  Axiom locked_excl_same_thread : forall g th n m,
+    locked g th n ** locked g th m |-- False.
+  Axiom locked_excl_different_thread : forall g th th' n m,
+    locked g th n ** locked g th' m |-- [| n = 0 \/ m = 0 |] ** True.
+
+  #[global] Declare Instance threadT_eq_decision : EqDecision thread_idT.
+  #[global] Declare Instance threadT_countable : Countable thread_idT.
+
+  Parameter used_threads : gname -> gset thread_idT -> mpred.
+  Axiom use_thread : forall th g m, 
+    th ∉ m ->
+    current_thread th ** used_threads g m |-- |==> used_threads g (m ∪ {[ th ]}) ** locked g th 0.
+
   cpp.spec "std::recursive_mutex::recursive_mutex()" as ctor_spec with
     (\this this
-     \pre{r} ▷r
-     \post Exists g, this |-> R g 1$m r ** token g 1$m).
+     \post Exists g, this |-> R g 1$m ** token g 1 ** used_threads g empty).
 
-  Parameter can_borrow : gname -> thread_idT -> mpred.
-
-  (*
-  R γ q r ** current_thread th |- R γ q r ** locked γ th 0
-  ^^ this statement allows us to have: <<locked γ th 0 ** locked γ th 0>>
-
-  R γ q r ** can_borrow γ th ** locked γ th (S n) |-- R γ q r ** r
-
-  - clients : gname -> gmap thread_idT nat -> mpred
-  - "locked" becomes ownership of a singleton of this.
-
-  R γ q r ** clients γ s ** current_thread th ** [| th ∉ s |]
-  |-- locked γ tr 0 ** clients γ ({ th } ∪ s) ** R γ q r
-  *)
-
+  cpp.spec "std::recursive_mutex::~recursive_mutex()" as dtor_spec with
+    (\this this
+     \pre{g} this |-> R g 1$m
+     \pre token g 1
+     \pre{ths} used_threads g ths
+     \post emp).
+  
   cpp.spec "std::recursive_mutex::lock()" as lock_spec with
       (\this this
-       \prepost{q r g} this |-> R g q r (* part of both pre and post *)
+       \prepost{q g} this |-> R g q (* part of both pre and post *)
        \persist{i} current_thread i
        \pre token g q
-       \pre{n} locked g i n
-       \post locked g i (S n)).
+       \pre{Q} AC << ∀ n , locked g i n >> @ top \ ↑ mask , empty
+                    << locked g i (S n) , COMM Q >>
+       \post Q).
+
+  cpp.spec "std::recursive_mutex::unlock()" as unlock_spec with
+      (\this this
+       \prepost{q g} this |-> R g q (* part of both pre and post *)
+       \persist{i} current_thread i
+       \pre token g q
+       \pre{Q} AC << ∀ n , locked g i (S n) >> @ top \ ↑ mask , empty
+                    << locked g i n , COMM Q >>
+       \post Q).
+
+
+  (* Alternative style:
+      R γ q r ** locked γ th (S n) |--| R γ q r ** r ** was_locked γ th (S n)
+
+      possible solution: two specs/choice in the spec for unlock: either
+      {locked γ th (n+1)} unlock() {locked γ th n}
+      or
+      {was_locked γ th (n+2)} unlock() {locked γ th (n+1)}
+*)
 
 End with_cpp.
 End recursive_mutex.
