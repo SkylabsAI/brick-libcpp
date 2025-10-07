@@ -176,5 +176,114 @@ Section with_cpp.
       {was_locked γ th (n+2)} unlock() {locked γ th (n+1)}
 *)
 
+  (* how to wrap this up into an invariant abstraction *)
+  Parameter rmutex_namespace : namespace.
+  Context `{HasOwn mpredI (excl_authR natO)}.
+  Definition inv_rmutex  (g : gname) (P : mpred) : mpred :=
+    inv rmutex_namespace (Exists n, own g (●E n) ** ([|n = 0|] ** P ** own g (◯E n) \\// [|n > 0|] ** Exists th, locked g th n)).
+
+  Definition acquireable (g : gname) (th : thread_idT) (n : nat) (P : mpred) : mpred :=
+    (P ** own g (◯E n)  \\// [|n = 0|] ** locked g th 0).
+  (* TODO: we need [| 0 < n |] to the left clause. *)
+
+  (* this is the usable pre-condition *)
+  #[ignore_missing]
+  cpp.spec "rmutex_client(std::recursive_mutex&)" with
+    (\arg{mut} "mut" (Vref mut)
+     \persist{g P} inv_rmutex g P
+     \prepost{q} mut |-> R g q
+     \prepost{th n} acquireable g th n P
+     \post emp).
+     
+     
+  cpp.spec "std::recursive_mutex::lock()" as lock_spec' with
+    (\this this
+     \persist{g P} inv_rmutex g P
+     \prepost{q} this |-> R g q
+     \pre{th n} acquireable g th n P
+     \post acquireable g th (S n) P).
+  (* to prove: this is derivable from lock_spec *)
+  
+  cpp.spec "std::recursive_mutex::unlock()" as unlock_spec' with
+    (\this this
+     \persist{g P} inv_rmutex g P
+     \prepost{q} this |-> R g q
+     \pre{th n} acquireable g th (S n) P
+     \post acquireable g th n P).
+
+(* potential examples that demos recursive mutex (over regular mutex) *)
+cpp.prog source prog {{
+  class C {
+    std::recursive_mutex& mut;
+    int balance_a;
+    int balance_b;
+
+    void update_a(int x) {
+      mut.lock();
+      balance_a += x;
+      mut.unlock();
+    }
+
+    void update_b(int x) {
+      mut.lock();
+      balance_b += x;
+      mut.unlock();
+    }
+    
+    void transfer(int x) {
+      mut.lock();
+      update_a(x);
+      update_b(-x);
+      mut.unlock();
+    }
+  };
+
+  struct C {
+     std::recursive_mutex _mutex;
+     int _x;
+
+     int get_x() {
+       _mutex.lock();
+       auto t = _x;
+       _mutex.unlock();
+       return t;
+     }
+
+     int get_distance(std::recursive_mutex& mut) {
+       _mutex.lock();
+       // mess with the locked resources
+       auto t = obj.get_x() + obj.get_x();
+       _mutex.unlock();
+       return t;
+     }
+  };
+
+   struct Rectangle {
+     std::recursive_mutex _mutex;
+     
+     int side1;
+     int side2;
+
+     void set_side1(int x) {
+       _mutex.lock();
+       this.side1 = x;
+       _mutex.unlock();
+     }
+
+     void set_side2(int x) {
+       _mutex.lock();
+       this.side2 = x;
+       _mutex.unlock();
+     }
+
+     void make_square(int x){
+       _mutex.lock();
+       set_side1(x);
+       set_side1(x);
+       _mutex.unlock();
+     }
+  };
+
+}}.
 End with_cpp.
 End recursive_mutex.
