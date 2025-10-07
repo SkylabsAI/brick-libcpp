@@ -5,3 +5,10 @@
 *.vos
 *.vok
 *.v.d
+mutexes.aux
+mutexes.bbl
+mutexes.blg
+mutexes.log
+mutexes.out
+mutexes.pdf
+mutexes.synctex.gz
