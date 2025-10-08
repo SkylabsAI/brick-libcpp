@@ -45,6 +45,51 @@
 %%
 %%
 \documentclass[sigplan,screen]{acmart}
+\usepackage{iris}
+\usepackage{mathpartir}
+
+%https://tex.stackexchange.com/questions/78187/is-there-another-symbol-that-is-slightly-different-from-forall-likewise-for-e
+\makeatletter
+\newcommand*{\fforall}{%
+	{\mathpalette\fforallAux{}}%
+}
+\newcommand*{\fforallAuxx}[1]{%
+	\sbox0{$\m@th#1\forall$}%
+	\sbox2{%
+		\rlap{%
+			\raisebox{\depth}{$\m@th#1\backslash$}%
+		}%
+		\kern\ht0 %
+	}%
+	\sbox2{\resizebox{\ht2}{\height}{\copy2}}%
+	\sbox2{\resizebox{!}{\ht0}{\copy2}}%
+	\wd2=0pt %
+	\copy2
+	\forall
+}
+\newsavebox\forallBox
+\newdimen\forallLineWidth
+\newdimen\forallSep
+\newcommand*{\fforallAux}[1]{%
+	\sbox\forallBox{$\m@th#1\forall$}%
+	\setlength{\forallLineWidth}{.06\wd\forallBox}%
+	\setlength{\forallSep}{.09\wd\forallBox}%
+	\tikz[
+	inner sep=0pt,
+	line cap=round,
+	line width=\forallLineWidth,
+	]
+	\draw
+	(0,0) node (A) {\copy\forallBox}
+	(A.south) ++(-\forallSep-\forallLineWidth,.4\forallLineWidth)
+	coordinate (A1)
+	(A.north west) ++(-\forallSep,-\forallLineWidth)
+	coordinate (A2)
+	(A1) -- (A2)
+	;%
+}
+\makeatother
+
 %%
 %% \BibTeX command to typeset BibTeX logo in the docs
 \AtBeginDocument{%
@@ -173,7 +218,7 @@
 %% The abstract is a short summary of the work to be presented in the
 %% article.
 \begin{abstract}
-  Recursive mutex specs are ...
+Mutexes (i.e., locks) are well understood in separation logic, and can be specified in terms of either protecting an invariant or atomically changing the state of the lock. In this abstract, we develop the same styles of specifications for \emph{recursive} mutexes, a common variant of mutexes in object-oriented languages like C++ and Java. We show that ...
 \end{abstract}
 
 %%
@@ -203,6 +248,31 @@
 \maketitle
 
 \section{Introduction}
+Mechanized concurrent separation logic has advanced to the stage where we can prove correctness of programs in real languages, using tools like VST~\cite{vst}, BRiCk~\cite{brick}, or RustBelt~\cite{rustbelt}. One way of making this useful to programmers is to verify commonly-used concurrency infrastructure in those languages (e.g., the ARC in Rust~\cite{}), thus increasing the assurance of a wide swath of real-world code. Here, we report our progresson on an effort to verify C++'s concurrency support library~\cite{} using BRiCk. Some parts of this library, like mutexes and thread creation, are familiar from prior work in Iris, but there are also many patterns that are commonplace in C++ but have not previously been analyzed in separation logic. In this abstract, we specifically address \emph{recursive mutexes}.
+
+The recursive mutex is a variant of the standard mutex/lock that can be acquired multiple times by the same thread, and must be released the same number of times before it becomes available to other threads. This allows methods to acquire a lock before using the associated resources, whether or not the calling thread already owns the lock, as long as they release it before returning. (example, further motivation).
+
+\section{TaDA-style lock specifications}
+There are two common styles of CSL lock specification, which have been proved to be equivalent~\cite{}: invariant-based, and logically atomic (sometimes called TaDA-style~\cite{tada}). In the invariant style, a lock $\ell$ protects an invariant $P$ (represented as $\mathsf{is\_lock}(\ell, P)$), and acquire and release are specified as:
+\begin{mathpar}
+\{\mathsf{is\_lock}(\ell, P\}\ \texttt{acquire}(\ell)\ \{\mathsf{is\_lock}(\ell, P) \ast P\}
+
+\{\mathsf{is\_lock}(\ell, P\} \ast P\}\ \texttt{release}(\ell)\ \{\mathsf{is\_lock}(\ell, P)\}
+\end{mathpar}
+In the atomic style, a lock is simply in one of two states, represented by e.g. a boolean that is $\mathsf{true}$ when the lock is held. Then acquire and release can be specified as:
+\begin{mathpar}
+\fforall b.\ \langle \mathsf{lock\_state}(\ell, b)\rangle\ \texttt{acquire}(\ell)\ \langle \neg b \ast \mathsf{lock\_state}(\ell, \mathsf{true})\rangle
+
+\langle \mathsf{lock\_state}(\ell, \mathsf{true})\rangle\ \texttt{release}(\ell)\ \langle \mathsf{lock\_state}(\ell, \mathsf{false})\rangle
+\end{mathpar}
+While one thread is trying to acquire the lock, its state is unknown and may shift back and forth due to the behavior of other threads; at the lock's linearization point, we observe that the lock is not held ($\neg b$), and shift it to the held state ($\mathsf{true}$). By combining these specifications with a global invariant of the form $P \vee \mathsf{lock\_state}(\ell, \mathsf{true})$, we can derive the invariant-style specs: an acquiring thread trades its ownership of the lock $\mathsf{lock\_state}(\ell, \mathsf{true})$ for the invariant $P$, and then returns it before releasing the lock. (Less obviously, the TaDA-style specs can also be derived from invariant-style specs, using an invariant that is simply a ghost variable indicating the state $b$ of the lock; see \citet{} for more details.)
+
+We begin by stating a logically atomic spec for recursive mutexes. The key points are:
+
+\section{Deriving an invariant-based lock specification}
+From a programmer's perspective, the key feature of a recursive mutex is that we hold the protected resources after acquiring it, whether or not we held them before. Thus, our invariant-based specs should let us conclude that we own the invariant after a call to \texttt{acquire} without requiring case analysis on whether we already hold the lock.
+
+\section{Example}
 
 %%
 %% The acknowledgments section is defined using the "acks" environment
