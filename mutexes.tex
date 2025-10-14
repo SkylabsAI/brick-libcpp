@@ -212,7 +212,9 @@
 %% other information printed in the page headers. This command allows
 %% the author to define a more concise list
 %% of authors' names for this purpose.
-\renewcommand{\shortauthors}{Trovato et al.}
+\renewcommand{\shortauthors}{Du et al.}
+
+\newcommand{\mutexR}{\ensuremath{\mathsf{rmutex}}}
 
 %%
 %% The abstract is a short summary of the work to be presented in the
@@ -248,7 +250,7 @@ Mutexes (i.e., locks) are well understood in separation logic, and can be specif
 \maketitle
 
 \section{Introduction}
-Mechanized concurrent separation logic has advanced to the stage where we can prove correctness of programs in real languages, using tools like VST~\cite{vst}, BRiCk~\cite{brick}, or RustBelt~\cite{rustbelt}. One way of making this useful to programmers is to verify commonly-used concurrency infrastructure in those languages (e.g., the ARC in Rust~\cite{}), thus increasing the assurance of a wide swath of real-world code. Here, we report our progresson on an effort to verify C++'s concurrency support library~\cite{} using BRiCk. Some parts of this library, like mutexes and thread creation, are familiar from prior work in Iris, but there are also many patterns that are commonplace in C++ but have not previously been analyzed in separation logic. In this abstract, we specifically address \emph{recursive mutexes}.
+Mechanized concurrent separation logic has advanced to the stage where we can prove correctness of programs in real languages, using tools like VST~\cite{vst}, BRiCk~\cite{brick}, or RustBelt~\cite{rustbelt}. One way of making this useful to programmers is to verify commonly-used concurrency infrastructure in those languages (e.g., the ARC in Rust), thus increasing the assurance of a wide swath of real-world code. Here, we report our progresson on an effort to verify C++'s concurrency support library~\cite{} using BRiCk. Some parts of this library, like mutexes and thread creation, are familiar from prior work in Iris, but there are also many patterns that are commonplace in C++ but have not previously been analyzed in separation logic. In this abstract, we specifically address \emph{recursive mutexes}.
 
 The recursive mutex is a variant of the standard mutex/lock that can be acquired multiple times by the same thread, and must be released the same number of times before it becomes available to other threads. This allows methods to acquire a lock before using the associated resources, whether or not the calling thread already owns the lock, as long as they release it before returning. (example, further motivation).
 
@@ -268,9 +270,47 @@ In the atomic style, a lock is simply in one of two states, represented by e.g. 
 While one thread is trying to acquire the lock, its state is unknown and may shift back and forth due to the behavior of other threads; at the lock's linearization point, we observe that the lock is not held ($\neg b$), and shift it to the held state ($\mathsf{true}$). By combining these specifications with a global invariant of the form $P \vee \mathsf{lock\_state}(\ell, \mathsf{true})$, we can derive the invariant-style specs: an acquiring thread trades its ownership of the lock $\mathsf{lock\_state}(\ell, \mathsf{true})$ for the invariant $P$, and then returns it before releasing the lock. (Less obviously, the TaDA-style specs can also be derived from invariant-style specs, using an invariant that is simply a ghost variable indicating the state $b$ of the lock; see \citet{} for more details.)
 
 We begin by stating a logically atomic spec for recursive mutexes. The key points are:
+\begin{itemize}
+\item A fractional \emph{handle} $\ell \mapsto_q \mutexR\ \gamma$ that is held by each thread that knows about the recursive mutex $\gamma$.
+\item A predicate $\mathsf{locked}\ \gamma\ t\ n$ indicating that thread $t$ has acquired mutex $\gamma$ $n$ times. When $n$ is 0, $t$ does not hold the mutex; when $n$ is greater than 0, it does.
+\end{itemize}
+The mutual exclusion property is reflected by the fact that $\mathsf{locked}\ \gamma\ t_1\ n_1 \ast \mathsf{locked}\ \gamma\ t_2\ n_2 \vdash n_1 = 0 \vee n_2 = 0$, i.e., at most one thread holds the mutex at a time.
+Furthermore, it is vital that there is only one $\mathsf{locked}$ predicate per thread; otherwise, %I forget why this is important
+. Thus, the $\mathsf{locked}$ predicate must also satisfy $\mathsf{locked}\ \gamma\ t\ n_1 \ast \mathsf{locked}\ \gamma\ t\ n_2 \vdash \mathsf{False}$. %other important details...
+
+The specifications for the recursive mutex functions are then simply:
+\begin{mathpar}
+\fforall n.\ \langle \ell \mapsto_q \mutexR\ \gamma \ast \mathsf{cur\_thread}(t) \ |\ \mathsf{locked}\ \gamma\ t\ n\rangle \vspace{-.8em}\\ \vspace{-.8em}
+\texttt{acquire}(\ell)\\ \langle \ell \mapsto_q \mutexR\ \gamma \ast \mathsf{cur\_thread}(t) \ |\ \mathsf{locked}\ \gamma\ t\ (n + 1)\rangle
+
+\fforall n.\ \langle \ell \mapsto_q \mutexR\ \gamma \ast \mathsf{cur\_thread}(t) \ |\ \mathsf{locked}\ \gamma\ t\ (n + 1)\rangle \vspace{-.8em}\\ \vspace{-.8em} \texttt{release}(\ell)\\ \langle \ell \mapsto_q \mutexR\ \gamma \ast \mathsf{cur\_thread}(t) \ |\ \mathsf{locked}\ \gamma\ t\ n\rangle
+\end{mathpar}
+\noindent The functions have the same effect regardless of whether $t$ already holds the mutex. 
 
 \section{Deriving an invariant-based lock specification}
 From a programmer's perspective, the key feature of a recursive mutex is that we hold the protected resources after acquiring it, whether or not we held them before. Thus, our invariant-based specs should let us conclude that we own the invariant after a call to \texttt{acquire} without requiring case analysis on whether we already hold the lock.
+
+A simple TaDA-style lock $\ell$ can be associated with resources $P$ via an invariant of the form $\knowInv{}{\exists b.\ \mathsf{lock\_state}(\ell, b) \ast (P \vee b = \mathsf{true})}$. If the lock is not held ($b = \mathsf{false}$), the invariant owns the resources $P$; if it is held ($b = \mathsf{true}$), then the invariant does not own $P$. Then upon acquiring the lock a thread can take $P$ out of the invariant, and upon release must return $P$ to the invariant. We use the same pattern for our recursive mutex:
+\begin{mathpar}
+\knowInv{}{\exists n.\ \ownGhost{}{\authfull n} \ast ((n = 0 \ast P \ast \ownGhost{}{\authfrag n}) \vee (n > 0 \ast \exists t.\ \mathsf{locked}\ \gamma\ t\ n))}
+\end{mathpar}
+Broadly, either the mutex is not held ($n = 0$) and the invariant owns $P$, or the mutex is held by some thread ($n > 0$) and the invariant does not own $P$. The main difference from the simple lock is that each thread that does not currently hold the mutex has its own $\mathsf{locked}\ \gamma\ u\ 0$ assertion outside of the invariant, and that we use a piece of authoritative ghost state to track the number of times the mutex is currently held, which belongs to the invariant when the mutex is not held and to the holding thread when it is. A thread's interface to the mutex is an assertion $\mathsf{holds}\ \gamma\ t\ n\ P$, representing the fact that thread $t$ holds the mutex $\gamma$ protecting resource $P$ $n$ times. We can define this as:
+\begin{mathpar}
+(P \ast \ownGhost{}{\authfrag n}) \vee (n = 0 \ast \mathsf{locked}\ \gamma\ t\ 0)
+\end{mathpar}
+Each thread $t$ participating in the mutex knows the number of times $n$ it holds the mutex. If that number is not 0, then $t$ holds the mutex, owning both $P$ and the ghost state $\ownGhost{}{\authfrag n}$ tracking the number of times the mutex is held (which is exactly the number of times $t$ holds it). If $n$ is 0, then $t$ only holds $\mathsf{locked}\ \gamma\ t\ 0$, the knowledge that it does not hold the lock.
+
+From these definitions and the TaDA-style specs, we can derive invariant-style specs for the recursive mutex:
+\begin{mathpar}
+\{\mathsf{rmutex\_inv} \ast \ell \mapsto \mutexR\ \gamma\ q \ast \mathsf{holds}\ \gamma\ t\ n\ P\}\vspace{-.8em}\\ \vspace{-.8em}
+\texttt{acquire}(\ell)\\
+\{\mathsf{rmutex\_inv} \ast \ell \mapsto \mutexR\ \gamma\ q \ast \mathsf{holds}\ \gamma\ t\ (n + 1)\ P\}
+
+\{\mathsf{rmutex\_inv} \ast \ell \mapsto \mutexR\ \gamma\ q \ast \mathsf{holds}\ \gamma\ t\ (n + 1)\ P\}\vspace{-.8em}\\ \vspace{-.8em}
+\texttt{release}(\ell)\\
+\{\mathsf{rmutex\_inv} \ast \ell \mapsto \mutexR\ \gamma\ q \ast \mathsf{holds}\ \gamma\ t\ n\ P\}
+\end{mathpar}
+\noindent These specifications implicitly say that if $n$ was 0 before an \texttt{acquire}, then afterwards $t$ gains ownership of $P$, and if $n$ is 0 after a \texttt{release}, then $t$ gave up ownership of $P$. However, these are not special cases in the specs---instead, threads may free acquire and release $\ell$, incrementing and decrementing their counts $n$, and then extract $P$ from $\mathsf{holds}$ whenever they can show that $n$ is greater than 0. This allows proofs that follow the standard use pattern of recursive mutexes: whenever a thread needs access to $P$, it first acquires the mutex regardless of whether it already held it, and then releases it once finished, returning it to whatever count $n$ it was at previously.
 
 \section{Example}
 
