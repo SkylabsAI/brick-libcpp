@@ -255,11 +255,12 @@ Mechanized concurrent separation logic has advanced to the stage where we can pr
 The recursive mutex is a variant of the standard mutex/lock that can be acquired multiple times by the same thread, and must be released the same number of times before it becomes available to other threads. This allows methods to acquire a lock before using the associated resources, whether or not the calling thread already owns the lock, as long as they release it before returning. (example, further motivation).
 
 \section{TaDA-style lock specifications}
+%skip the atomic version entirely, present the invariant-style specification and a borrowing lemma letting you get P out of holds, then note that it's implemented using a logically atomic spec
 There are two common styles of CSL lock specification, which have been proved to be equivalent~\cite{}: invariant-based, and logically atomic (sometimes called TaDA-style~\cite{tada}). In the invariant style, a lock $\ell$ protects an invariant $P$ (represented as $\mathsf{is\_lock}(\ell, P)$), and acquire and release are specified as:
 \begin{mathpar}
-\{\mathsf{is\_lock}(\ell, P\}\ \texttt{acquire}(\ell)\ \{\mathsf{is\_lock}(\ell, P) \ast P\}
+\{\mathsf{is\_lock}(\ell, P)\}\ \texttt{acquire}(\ell)\ \{\mathsf{is\_lock}(\ell, P) \ast P\}
 
-\{\mathsf{is\_lock}(\ell, P\} \ast P\}\ \texttt{release}(\ell)\ \{\mathsf{is\_lock}(\ell, P)\}
+\{\mathsf{is\_lock}(\ell, P)\} \ast P\}\ \texttt{release}(\ell)\ \{\mathsf{is\_lock}(\ell, P)\}
 \end{mathpar}
 In the atomic style, a lock is simply in one of two states, represented by e.g. a boolean that is $\mathsf{true}$ when the lock is held. Then acquire and release can be specified as:
 \begin{mathpar}
