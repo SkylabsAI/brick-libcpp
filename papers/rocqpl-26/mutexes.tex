@@ -47,6 +47,7 @@
 \documentclass[sigplan,screen]{acmart}
 \usepackage{iris}
 \usepackage{mathpartir}
+\usepackage{cleveref}
 
 %https://tex.stackexchange.com/questions/78187/is-there-another-symbol-that-is-slightly-different-from-forall-likewise-for-e
 \makeatletter
@@ -254,8 +255,42 @@ By now, mechanized concurrent separation logic can prove correct programs in rea
 To enable verifying more programs, specifying and verifying standard libraries (like ARC in Rust) has high leverage.
 % Verifying commonly-used concurrency infrastructure in those languages (e.g., the
 % ARC in Rust), thus increasing the assurance of a wide swath of real-world code.
-Here, we report our progress on verifying C++'s concurrency library~\cite{} using BRiCk. While some utilities are standard, others have not been previously analyzed in separation logic. In particular, we address \emph{recursive mutexes}.
-%Some parts of this library, like mutexes and thread creation, are familiar from prior work in Iris, but there are also many patterns that are commonplace in C++ but have not.
+Here, we report our progress on verifying C++'s concurrency library~\cite{} using BRiCk. While some utilities are standard, others have not been previously
+analyzed in separation logic.
+In particular, we address \emph{recursive mutexes}:
+a thread owning a non-recursive mutex cannot acquire the same mutex again,
+while a thread owning a recursive mutex can acquire it again, as shown in \cref{fig:rec-mutex}.
+Crucially, methods \verb!update_a! and \verb!transfer! are both thread-safe, and
+\verb!transfer! can reuse \verb!update_a! even if both acquire the same mutex!
+With normal mutexes, \verb!transfer! couldn't call \verb!update_a!; typically,
+\verb!transfer! could only call an alternative \verb!update_a_no_lock!.
+To sum up, acquiring a recursive mutex is not just more convenient, but more
+transparent and better encapsulated than using a normal mutex.
+
+% Some parts of this library, like mutexes and thread creation, are familiar from prior work in Iris, but there are also many patterns that are commonplace in C++ but have not.
+
+\begin{figure}[h]
+  \small
+\begin{verbatim}
+class C {
+  int balance_a; int balance_b;
+  std::recursive_mutex mut;
+public:
+  void update_a(int x) {
+    mut.lock(); balance_a += x; mut.unlock();
+  }
+  void update_b(int x) {
+    mut.lock(); balance_b += x; mut.unlock();
+  }
+
+  void transfer(int x) {
+    mut.lock(); update_a(x); update_b(-x); mut.unlock();
+  }
+};
+\end{verbatim}
+  \label{fig:rec-mutex}
+  \caption{An example using recursive mutexes.}
+\end{figure}
 
 A recursive mutex is a variant of the standard mutex/lock that can be acquired multiple times by the same thread, and must be released the same number of times before it becomes available to other threads. This allows methods to acquire a lock before using the associated resources, whether or not the calling thread already owns the lock, as long as they release it before returning. (example, further motivation).
 
