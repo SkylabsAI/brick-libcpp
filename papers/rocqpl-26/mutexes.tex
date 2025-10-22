@@ -288,11 +288,11 @@ public:
   }
 };
 \end{verbatim}
-  \label{fig:rec-mutex}
   \caption{An example using recursive mutexes.}
+  \label{fig:rec-mutex}
 \end{figure}
 
-A recursive mutex is a variant of the standard mutex/lock that can be acquired multiple times by the same thread, and must be released the same number of times before it becomes available to other threads. This allows methods to acquire a lock before using the associated resources, whether or not the calling thread already owns the lock, as long as they release it before returning. (example, further motivation).
+In this abstract we give a separation logic specification for recursive mutexes, and show that it allows encapsulation reasoning: in particular, a client can acquire a recursive mutex and access its protected resources without doing case analysis on whether they already own the mutex. %+ arguments thing?
 
 \section{Specifying the recursive mutex}
 %skip the atomic version entirely, present the invariant-style specification and a borrowing lemma letting you get P out of holds, then note that it's implemented using a logically atomic spec
@@ -332,6 +332,11 @@ n > 0 \Rightarrow\ &\ell \mapsto \mutexR\ \gamma\ q \ast \mathsf{holds}\ \gamma\
 . Essentially, while the standard lock acquire spec simultaneously acquires the lock and gives the thread ownership of $P$, our recursive mutex specs separate these operations into two steps, incrementing $n$ on acquire and then letting the thread obtain $P$ at any later point, as long as $n$ is greater than 0. Since $\mathsf{holds}$ is part of the precondition of \texttt{release}, the thread must return $P$ before releasing the lock, whether or not the release actually sets $n$ to 0. %more on this, and the fixed-argument trick
 
 \section{Example}
+
+\section{Discussion}
+Our recursive mutex specs let us ... We actually implement the specs by deriving them from more primitive \emph{logically atomic} specs and an associated invariant, but these details are entirely hidden from the client.
+
+This work is part of our broader effort to verify the C++ standard library...
 
 %%
 %% The acknowledgments section is defined using the "acks" environment
