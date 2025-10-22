@@ -250,9 +250,14 @@ Mutexes (i.e., locks) are well understood in separation logic, and can be specif
 \maketitle
 
 \section{Introduction}
-Mechanized concurrent separation logic has advanced to the stage where we can prove correctness of programs in real languages, using tools like VST~\cite{vst}, BRiCk~\cite{brick}, or RustBelt~\cite{rustbelt}. One way of making this useful to programmers is to verify commonly-used concurrency infrastructure in those languages (e.g., the ARC in Rust), thus increasing the assurance of a wide swath of real-world code. Here, we report our progresson on an effort to verify C++'s concurrency support library~\cite{} using BRiCk. Some parts of this library, like mutexes and thread creation, are familiar from prior work in Iris, but there are also many patterns that are commonplace in C++ but have not previously been analyzed in separation logic. In this abstract, we specifically address \emph{recursive mutexes}.
+By now, mechanized concurrent separation logic can prove correct programs in real languages, using tools like VST~\cite{vst}, BRiCk~\cite{brick}, or RustBelt~\cite{rustbelt}.
+To enable verifying more programs, specifying and verifying standard libraries (like ARC in Rust) has high leverage.
+% Verifying commonly-used concurrency infrastructure in those languages (e.g., the
+% ARC in Rust), thus increasing the assurance of a wide swath of real-world code.
+Here, we report our progress on verifying C++'s concurrency library~\cite{} using BRiCk. While some utilities are standard, others have not been previously analyzed in separation logic. In particular, we address \emph{recursive mutexes}.
+%Some parts of this library, like mutexes and thread creation, are familiar from prior work in Iris, but there are also many patterns that are commonplace in C++ but have not.
 
-The recursive mutex is a variant of the standard mutex/lock that can be acquired multiple times by the same thread, and must be released the same number of times before it becomes available to other threads. This allows methods to acquire a lock before using the associated resources, whether or not the calling thread already owns the lock, as long as they release it before returning. (example, further motivation).
+A recursive mutex is a variant of the standard mutex/lock that can be acquired multiple times by the same thread, and must be released the same number of times before it becomes available to other threads. This allows methods to acquire a lock before using the associated resources, whether or not the calling thread already owns the lock, as long as they release it before returning. (example, further motivation).
 
 \section{Specifying the recursive mutex}
 %skip the atomic version entirely, present the invariant-style specification and a borrowing lemma letting you get P out of holds, then note that it's implemented using a logically atomic spec
