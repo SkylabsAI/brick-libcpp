@@ -106,7 +106,7 @@ Section with_cpp.
 
 
 
-(* NOTE: Invariant used to protect resource [r]
+  (* NOTE: Invariant used to protect resource [r]
     inv (r \\// exists th n, locked th (S n)) *)
 
   (* recursive mutex -- ownership of the class. *)
@@ -174,7 +174,7 @@ Section with_cpp.
       {locked γ th (n+1)} unlock() {locked γ th n}
       or
       {was_locked γ th (n+2)} unlock() {locked γ th (n+1)}
-*)
+   *)
 
   (* how to wrap this up into an invariant abstraction *)
   Parameter rmutex_namespace : namespace.
@@ -182,34 +182,57 @@ Section with_cpp.
   Definition inv_rmutex  (g : gname) (P : mpred) : mpred :=
     inv rmutex_namespace (Exists n, own g (●E n) ** ([|n = 0|] ** P ** own g (◯E n) \\// [|n > 0|] ** Exists th, locked g th n)).
 
-  Definition acquireable (g : gname) (th : thread_idT) (n : nat) (P : mpred) : mpred :=
-    (P ** own g (◯E n)  \\// [|n = 0|] ** locked g th 0).
-  (* TODO: we need [| 0 < n |] to the left clause. *)
+  (** [acquire_state] tracks the acquisition state of a recursive_mutex.
+   *)
+  Inductive acquire_state {TT : tele} : Type :=
+  | NotHeld                (* not held *)
+  | Held (n : nat) (xs : TT) (* acquired [n + 1] times with quantifiers [xs] *).
+  Arguments acquire_state _ : clear implicits.
+
+  Definition acquire {TT} (a a' : acquire_state TT) : Prop :=
+    match a with
+    | NotHeld => exists xs, a' = Held 0 xs
+    | Held n xs => a' = Held (S n) xs
+    end.
+  Definition release {TT} (a : acquire_state TT) : acquire_state TT :=
+    match a with
+    | NotHeld => NotHeld (* unreachable *)
+    | Held n xs =>
+        match n with
+        | 0 => NotHeld
+        | S n => Held n xs
+        end
+    end.
+
+  Definition acquireable (g : gname) (th : thread_idT) {TT: tele} (n : acquire_state TT) (P : TT -t> mpred) : mpred :=
+    match n with
+    | NotHeld => locked g th 0
+    | Held n args => own g (◯E (S n)) ** tele_app P args
+    end.
 
   (* this is the usable pre-condition *)
   #[ignore_missing]
   cpp.spec "rmutex_client(std::recursive_mutex&)" with
     (\arg{mut} "mut" (Vref mut)
-     \persist{g P} inv_rmutex g P
+     \persist{g tt P} inv_rmutex g (∃ xs : tele_arg tt, tele_app P xs)
      \prepost{q} mut |-> R g q
      \prepost{th n} acquireable g th n P
      \post emp).
 
-
   cpp.spec "std::recursive_mutex::lock()" as lock_spec' with
     (\this this
-     \persist{g P} inv_rmutex g P
+     \persist{g tt P} inv_rmutex g (∃ xs : tele_arg tt, tele_app P xs)
      \prepost{q} this |-> R g q
      \pre{th n} acquireable g th n P
-     \post acquireable g th (S n) P).
+     \post Exists n', [| acquire n n' |] ** acquireable g th n' P).
   (* to prove: this is derivable from lock_spec *)
 
   cpp.spec "std::recursive_mutex::unlock()" as unlock_spec' with
     (\this this
-     \persist{g P} inv_rmutex g P
+     \persist{g tt P} inv_rmutex g (∃ xs : tele_arg tt, tele_app P xs)
      \prepost{q} this |-> R g q
-     \pre{th n} acquireable g th (S n) P
-     \post acquireable g th n P).
+     \pre{th n args} acquireable g th (Held n args) P
+     \post acquireable g th (release $ Held n args) P).
 
 End with_cpp.
 End recursive_mutex.
