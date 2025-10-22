@@ -305,7 +305,7 @@ The standard separation logic specification for a mutex/lock associates a lock $
 \noindent A thread that acquires the lock gains access to the protected resources, and gives them up upon release. Our goal is to state similar specifications for recursive mutexes. The key points are:
 \begin{itemize}
 \item A fractional \emph{handle} $\ell \mapsto_q \mutexR\ \gamma\ P$ that is held by each thread that knows about the recursive mutex $\gamma$ with invariant $P$.
-\item A predicate $\mathsf{holds}\ \gamma\ t\ n\ P$ indicating that thread $t$ has acquired mutex $\gamma$ with invariant $P$ $n$ times. When $n$ is 0, $t$ does not hold the mutex; when $n$ is greater than 0, it does, and should have access to $P$.
+\item A predicate $\mathsf{holds}\ \gamma\ t\ n\ P$ indicating that thread $t$ has acquired mutex $\gamma$ with invariant $P$ $n$ times. When $n$ is 0, $t$ does not hold the mutex; when $n$ is greater than 0, it does, and can borrow $P$ from $\mathsf{holds}\ \gamma\ t\ n\ P$.
 \end{itemize}%We probably don't need P in both \mutexR and \mathsf{holds}.
 The main difference from the simple lock is that every thread that might interact with mutex $\gamma$, whether it currently holds it or not, has its own $\mathsf{holds}\ \gamma\ t\ n\ P$ assertion; $n$ is simply 0 for any thread that does not currently hold the mutex. 
 The mutual exclusion property is reflected by the fact that $\mathsf{holds}\ \gamma\ t_1\ n_1\ P \ast \mathsf{holds}\ \gamma\ t_2\ n_2\ P \vdash n_1 = 0 \vee n_2 = 0$, i.e., at most one thread holds the mutex at a time.
