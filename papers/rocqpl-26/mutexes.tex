@@ -348,7 +348,15 @@ The invariant for the example is \[P(a, b) \eqdef \verb!balance_a! \mapsto a \as
 \noindent and similarly for \verb!update_b!. When a thread calls \verb!update_a!, it gets back the lock with the same $n$ as before the call; if that $n$ is greater than 0 then we know that the new value of \verb!balance_a! is $a + x$, while otherwise we only know that the invariant $\exists a, b.\ P(a, b)$ has been preserved. Since \verb!transfer! begins by acquiring the mutex, we can show that the value of $\verb!balance_a! + \verb!balance_b!$ is preserved by the function.
 
 \section{Discussion}
-We have seen that the recursive mutex specs let us support the common pattern of functions that work equally well whether or not the caller holds the lock before calling, without losing any information about the invariant upon return. In our implementation, the specs are derived from more primitive \emph{logically atomic} specs and an associated invariant, but these details are entirely hidden from the client. This work is part of our broader effort to verify the C++ standard library; we also have finished or in-progress work on ...
+We have seen that the recursive mutex specs let us support the common pattern of functions that work equally well whether or not the caller holds the lock before calling, without losing any information about the invariant upon return. In our implementation, the specs are derived from more primitive \emph{logically atomic} specs and an associated invariant, but these details are entirely hidden from the client.
+
+This work is part of our broader effort to verify the C++ standard library. We believe that this project will highlight more reasoning principles that are commonly used in mainstream software engineering.
+Our current specifications include commonly used libraries such as \verb!std::atomic! and \verb!std::vector!.
+We welcome collaboration on this project:
+\begin{center}
+\url{https://github.com/SkylabsAI/brick-libcpp}
+\end{center}
+%%; we also have finished or in-progress work on ...
 
 %%
 %% The acknowledgments section is defined using the "acks" environment
