@@ -11,5 +11,5 @@
  (theories
   Lens Lens.Elpi Equations Equations.Prop Equations.Type
   Stdlib
-  bluerock iris stdpp elpi elpi_elpi ExtLib Ltac2))
+  bluerock iris stdpp elpi elpi_elpi ExtLib Ltac2 bluerock.cpp.stdlib))
 (include dune.inc)
