@@ -168,7 +168,7 @@
 %% used to denote shared contribution to the research.
 \author{Ke Du}
 \email{kdu9@uic.edu}
-%\orcid{1234-5678-9012}
+\orcid{0009-0008-2465-1082}
 \affiliation{%
   \institution{University of Illinois Chicago}
   \city{Chicago}
@@ -329,13 +329,15 @@ From a programmer's perspective, the key feature of a recursive mutex is that we
 
 The final piece is the ``borrowing'' rule that allows a thread to obtain the invariant $P$ if it holds the lock:
 \begin{align*}
-n > 0 \Rightarrow\ &\ell \mapsto \mutexR\ \gamma\ q \ast \mathsf{holds}\ \gamma\ t\ n\ P \vsE \\&\ell \mapsto \mutexR\ \gamma\ q \ast P \ast \mathsf{held}\ \gamma\ t\ n
+n > 0 \Rightarrow\ &\ell \mapsto \mutexR\ \gamma\ q \ast \mathsf{holds}\ \gamma\ t\ n\ P \dashv \vdash  \\&\ell \mapsto \mutexR\ \gamma\ q \ast P \ast \mathsf{held}\ \gamma\ t\ n
 \end{align*}
-\noindent A thread can exchange its positive $\mathsf{holds}$ predicate for ownership of $P$, plus a retainer $\mathsf{held}$ that tracks $n$ but does not give access to $P$. This exchange operation is a view shift because it is implemented via an Iris invariant~\cite{iris}, but this is mostly irrelevant from the user's perspective%elaborate
-. Essentially, while the standard lock acquire spec simultaneously acquires the lock and gives the thread ownership of $P$, our recursive mutex specs separate these operations into two steps, incrementing $n$ on acquire and then letting the thread obtain $P$ at any later point, as long as $n$ is greater than 0. Since $\mathsf{holds}$ is part of the precondition of \texttt{unlock}, the thread must unborrow $P$ before releasing the lock, whether or not the release actually sets $n$ to 0. %more on this, and the fixed-argument trick
+\noindent A thread can exchange its positive $\mathsf{holds}$ predicate for ownership of $P$, plus a retainer $\mathsf{held}$ that tracks $n$ but does not give access to $P$.
+%  This exchange operation is a view shift because it is implemented via an Iris invariant~\cite{iris}, but this is mostly irrelevant from the user's perspective. % holds is defined as P * held when n>0
+
+ Essentially, while the standard lock acquire spec simultaneously acquires the lock and gives the thread ownership of $P$, our recursive mutex specs separate these operations into two steps, incrementing $n$ on acquire and then letting the thread obtain $P$ at any later point, as long as $n$ is greater than 0. Since $\mathsf{holds}$ is part of the precondition of \texttt{unlock}, the thread must unborrow $P$ before releasing the lock, whether or not the release actually sets $n$ to 0. %more on this, and the fixed-argument trick
 
 \section{Fixing Arguments}
-Lock invariants are usually written with existentially quantified arguments: for instance, a lock that protects the location $x$ may have the invariant $P \eqdef \exists v.\ x \mapsto v$. In this case, the borrowing rule's requirement that return $P$ to $\mathsf{holds}$ before acquiring or releasing the mutex effectively re-quantifies the variable, forcing the thread to lose information about resources it owns. We fix this by packing any such arguments into a tuple $a$, provided as an additional parameter to $\mathsf{holds}$: $\mathsf{holds}\ \gamma\ t\ n\ P\ a$ means that if $n > 0$, then we hold resources $P(a)$, and the argument $a$ will remain the same as long as $n > 0$. We use this approach to verify the example from \cref{fig:rec-mutex}.
+Lock invariants are usually written with existentially quantified arguments: for instance, a lock that protects the location $x$ may have the invariant $P \eqdef \exists v.\ x \mapsto v$. In this case, the borrowing rule's requirement that return $P$ to $\mathsf{holds}$ before acquiring or releasing the mutex effectively re-quantifies the variable, forcing the thread to lose information about resources it owns. We fix this by packing any such arguments into a tuple $a$, provided as an additional parameter to $\mathsf{holds}$: $\mathsf{holds}\ \gamma\ t\ n\ P\ a$ means that if $n > 0$, then we hold resources $P(a)$, and the argument $a$ will remain the same as long as $n$ remains positive; otherwise, $n = 0$, arguments to $P$ is existentially quantified, and $a$ is ignored. We use this approach to verify the example from \cref{fig:rec-mutex}.
 
 The invariant for the example is \[P(a, b) \eqdef \verb!balance_a! \mapsto a \ast \verb!balance_b! \mapsto b\]
 
