@@ -221,7 +221,7 @@
 %% The abstract is a short summary of the work to be presented in the
 %% article.
 \begin{abstract}
-Mutexes (i.e., locks) are well understood in separation logic, and can be specified in terms of either protecting an invariant or atomically changing the state of the lock. In this abstract, we develop the same styles of specifications for \emph{recursive} mutexes, a common variant of mutexes in object-oriented languages like C++ and Java. We show that ...
+Mutexes (i.e., locks) are well understood in separation logic, and can be specified in terms of either protecting an invariant or atomically changing the state of the lock. In this abstract, we develop the same styles of specifications for \emph{recursive} mutexes, a common variant of mutexes in object-oriented languages like C++ and Java. A recursive mutex can be acquired any number of times by the same thread, and our specifications treat all acquires/releases uniformly, with clients only needing to determine whether they hold the mutex when accessing the lock invariant.
 \end{abstract}
 
 %%
@@ -255,7 +255,7 @@ By now, mechanized concurrent separation logic can prove correct programs in rea
 To enable verifying more programs, specifying and verifying standard libraries (like ARC in Rust) has high leverage.
 % Verifying commonly-used concurrency infrastructure in those languages (e.g., the
 % ARC in Rust), thus increasing the assurance of a wide swath of real-world code.
-Here, we report our progress on verifying C++'s concurrency library~\cite{} using BRiCk. While some utilities are standard, others have not been previously
+Here, we report our progress on verifying C++'s concurrency library~\cite{ISO:2024:IIP} using BRiCk. While some utilities are standard, others have not been previously
 analyzed in separation logic.
 In particular, we address \emph{recursive mutexes}:
 a thread owning a non-recursive mutex cannot acquire the same mutex again,
@@ -345,9 +345,7 @@ The invariant for the example is \[P(a, b) \eqdef \verb!balance_a! \mapsto a \as
 \noindent and similarly for \verb!update_b!. When a thread calls \verb!update_a!, it gets back the lock with the same $n$ as before the call; if that $n$ is greater than 0 then we know that the new value of \verb!balance_a! is $a + x$, while otherwise we only know that the invariant $\exists a, b.\ P(a, b)$ has been preserved. Since \verb!transfer! begins by acquiring the mutex, we can show that the final value of $\verb!balance_a! + \verb!balance_b!$ is the same as the initial value.
 
 \section{Discussion}
-Our recursive mutex specs let us ... We actually implement the specs by deriving them from more primitive \emph{logically atomic} specs and an associated invariant, but these details are entirely hidden from the client.
-
-This work is part of our broader effort to verify the C++ standard library...
+We have seen that the recursive mutex specs let us support the common pattern of functions that work equally well whether or not the caller holds the lock before calling, without losing any information about the invariant upon return. In our implemention, the specs are derived from more primitive \emph{logically atomic} specs and an associated invariant, but these details are entirely hidden from the client. This work is part of our broader effort to verify the C++ standard library; we also have finished or in-progress work on ...
 
 %%
 %% The acknowledgments section is defined using the "acks" environment
