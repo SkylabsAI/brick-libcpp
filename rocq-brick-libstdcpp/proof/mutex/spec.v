@@ -185,7 +185,7 @@ Section with_cpp.
   Inductive acquire_state {TT : tele} : Type :=
   | NotHeld                (* not held *)
   | Held (n : nat) (xs : TT) (* acquired [n + 1] times with quantifiers [xs] *).
-  Arguments acquire_state _ : clear implicits.
+  #[global] Arguments acquire_state _ : clear implicits.
 
   Definition acquire {TT} (a a' : acquire_state TT) : Prop :=
     match a with
