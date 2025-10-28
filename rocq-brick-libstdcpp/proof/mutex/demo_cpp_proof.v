@@ -24,8 +24,8 @@ Section with_cpp.
       recursive_mutex.inv_rmutex γ (∃ a_b : tele_arg _, tele_app (P this) a_b)).
 
   Definition update {TT : tele} (f : TT -t> TT)
-    (x : @recursive_mutex.acquire_state TT)
-    : @recursive_mutex.acquire_state TT :=
+    (x : recursive_mutex.acquire_state TT)
+    : recursive_mutex.acquire_state TT :=
     match x with
     | recursive_mutex.NotHeld => recursive_mutex.NotHeld
     | recursive_mutex.Held n xs => recursive_mutex.Held n (tele_app f xs)
@@ -48,29 +48,34 @@ Section with_cpp.
   #[global] Instance acquireable_learn γ th TT : LearnEq2 (@recursive_mutex.acquireable _ _ _ γ th TT).
   Proof. solve_learnable. Qed.
 
+  (* TODO make this into a hint *)
+  Lemma is_held {t1 t2: recursive_mutex.acquire_state TT} :
+    recursive_mutex.acquire t1 t2 ->
+    ∃ n xs, t2 = recursive_mutex.Held n xs /\ match n with O => t1 = recursive_mutex.NotHeld | S n' => t1 = recursive_mutex.Held n' xs end.
+  Proof.
+    intros.
+    destruct t1; simpl in H; eauto.
+    - exists 0. naive_solver.
+    - exists (S n). naive_solver.
+  Qed.
+
   Lemma update_a_ok : verify[source] "C::update_a(int)".
   Proof.
     verify_spec; go.
     rewrite /CR.
     iExists _; iExists TT; iExists (P this); iExists q; iExists th.
     go. ego.
-    destruct args.
-    { simpl in *. destruct H; subst.
-      go.
-      rewrite /P/=. destruct x0 as [?[? []]]; simpl.
-      go.
-      iSplitR. { admit. }
-      go.
-      iExists γ; iExists TT; iExists (P this); iExists q; iExists th; iExists 0; iExists (mk (_ + x) _).
-      go. rewrite /P. go. }
-    {  simpl in *. subst.
-       rewrite /P/=. destruct xs as [a [b []]]; simpl.
-       go.
-       iSplitR. { admit. }
-       go.
-       iExists γ; iExists TT; iExists (P this); iExists q; iExists th; iExists (S n); iExists (mk (_ + x) _).
-       go. rewrite /P. go.
-       rewrite /P. go. }
+    (* we know t must be in a held state *)
+    destruct (is_held H) as (n & xs & -> & ?).
+    simpl in *. subst.
+    rewrite /P/=. destruct xs as [a [b []]]; simpl.
+    go.
+    iSplitR. { admit. }
+    go.
+    iExists γ; iExists TT; iExists (P this); iExists q; iExists th; iExists n; iExists (mk (_ + x) _).
+    go. rewrite /P. go.
+    rewrite /P. go.
+    destruct n; by subst.
   Admitted.
 
   cpp.spec "C::transfer(int)" with
@@ -93,14 +98,13 @@ Section with_cpp.
     iExists γ; iExists q; iExists _; iExists th; go.
     iSplitL; [ | admit ].
     go.
-    destruct args.
-    { destruct H. subst.
-      iExists γ; iExists TT; iExists (P this); iExists q; iExists th; iExists _; iExists _. go. }
-    { red in H; subst.
-      iExists γ; iExists TT; iExists (P this); iExists q; iExists th; iExists _; iExists _. go.
-      destruct xs as [a[b[]]]; simpl.
-      have->: (b + (0 - x) = b - x)%Z by lia.
-      go. }
+    (* we know t must be in a held state *)
+    destruct (is_held H) as (n & xs & -> & ?).
+    red in H; subst.
+    iExists γ; iExists TT; iExists (P this); iExists q; iExists th; iExists _; iExists _. go.
+    destruct xs as [a[b[]]]; simpl.
+    have->: (b + (0 - x) = b - x)%Z by lia.
+    destruct n; by subst.
   Admitted.
 
 End with_cpp.
