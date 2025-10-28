@@ -17,7 +17,8 @@ usage() {
 		The output is filesystem-independent and <filename>.<ext> need not exist.
 		Placing the output in <base>/dune.inc will transform
 		<base>/<filename>.<ext> into <base>/<filename>_<ext>.v and
-		(with \`-t\`) <base>/<filename>_<ext>_templates.v.
+		<base>/<filename>_<ext>_names.v and (with \`-t\`)
+		<base>/<filename>_<ext>_templates.v.
 	EOF
 	exit 1
 }
@@ -43,17 +44,22 @@ outRule() {
 	if [ "$system" = 1 ]; then
 		universe=" (universe)"
 	fi
-	local cpp2v="cpp2v -v %{input}"
-	local core="-o ${module}"
+	local cpp2v="cpp2v -v %{input} -o ${module}"
+
+	if [ "$gen_names" = 1 ]; then
+		local names="${name}_${ext}_names.v"
+		targ="${targ} ${names}"
+		cpp2v="${cpp2v} -names ${names}"
+	fi
 
 	if [ "$templates" = 1 ]; then
 		local templates="${name}_${ext}_templates.v"
-		local cmd="${cpp2v} ${core} --templates=${templates} ${1+ $@} ${clang_options} "
+		cpp2v="${cpp2v} --templates=${templates}"
 		targ="$targ ${templates}"
-	else
-		local cmd="${cpp2v} ${core} ${1+ $@} ${clang_options}"
 	fi
-	action="(run ${cmd})"
+
+	action="(run ${cpp2v} ${1+ $@} ${clang_options})"
+
 	sed "s/^/${indent}/" <<-EOF
 		(rule
 		 (targets ${module}.stderr ${targ})
@@ -86,12 +92,17 @@ traverse() {
 	fi
 }
 
+gen_names=0
 templates=0
 system=0
 prefix="../"
 while :
 do
 	case "$1" in
+	-n)
+		gen_names=1
+		shift
+		;;
 	-t)
 		templates=1
 		shift
