@@ -103,7 +103,19 @@ Section specsproofs.
   
   cpp.spec "testnewarrdel()" as testnewarrdelspec with (
         \post emp).
-  
+
+  Lemma anyRexpand (x:ptr) ty (n:N) q:
+    ([∗list] i ∈ (seqN 0 n), x.[ty ! Z.of_N i] |-> anyR ty q) |-- x |-> anyR (Tarray ty n) q.
+  Proof. Admitted.
+
+  Lemma trueemp: True ⊢ emp:mpred.
+  Proof. Admitted.
+
+  Lemma allocatedNullForget q (sz:N):
+    (0<sz)%N ->
+    nullptr |-> allocatedR q sz |-- emp.
+  Proof using. Admitted.
+    
   Lemma prf2del: verify[module] testnewarrdelspec.
   Proof using MOD.
     verify_spec.
@@ -118,9 +130,18 @@ Section specsproofs.
     unfold arrR_def.
     go.
     case_bool_decide; subst; try go.
-    assert ("int"%cpp_type = "int[2]"%cpp_type) as Hfalse by admit.
-    (* _x_ |-> anyR "int[2]" 1$m *)
-    (* It seems the delete wp or spec is horribly wrong for the case of delete [] *)
-  Abort.
+    rewrite <- anyRexpand.
+    unfold seqN.
+    simpl.
+    go.
+    normalize_ptrs.
+    replace (overhead + - overhead)%Z with 0%Z by lia.
+    normalize_ptrs.
+    go.
+    case_bool_decide; Forward.rwHyps; try go.
+    { rewrite <- allocatedNullForget;[| lia]. eagerUnifyU. go. iClear "#". iStopProof. auto. apply trueemp.
+    }
+    { iClear "#". iStopProof. auto. apply trueemp. }
+  Qed.
 
 End specsproofs.

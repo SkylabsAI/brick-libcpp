@@ -1,5 +1,3 @@
-#include<memory>
-
 int * testnew() {
   int *x;
   x=new int;
@@ -21,5 +19,5 @@ void testnewdel() {
 
 void testnewarrdel() {
   int *x = testnewarr();
-  delete x;
+  delete [] x;
 }
