@@ -7,12 +7,13 @@ Require Import bluerock.auto.cpp.proof.
 Require Import bluerock.brick.libstdcpp.mutex.inc_hpp.
 Require Export bluerock.brick.libstdcpp.runtime.pred.
 
+Module mutex.
 Section with_cpp.
   Context `{Σ : cpp_logic}.
 
   (** Fractional ownership of a <<std::mutex>> guarding the predicate <<P>>. *)
-  Parameter mutex_rep : forall {HAS_THREADS : HasStdThreads Σ} {σ : genv}, gname -> cQp.t -> mpred -> Rep.
-  #[only(cfractional,cfracvalid,ascfractional,timeless)] derive mutex_rep.
+  Parameter R : forall {HAS_THREADS : HasStdThreads Σ} {σ : genv}, gname -> cQp.t -> mpred -> Rep.
+  #[only(cfractional,cfracvalid,ascfractional,timeless)] derive R.
   (*
   #[global] Declare Instance mutex_rep_typed : Typed3 "std::mutex" mutex_rep.
   #[global] Declare Instance mutex_rep_cfrac : forall γ, CFractional1 (mutex_rep γ).
@@ -20,7 +21,7 @@ Section with_cpp.
   #[global] Declare Instance mutex_rep_cfracvalid : forall γ, CFracValid2 (mutex_rep γ).
   #[global] Declare Instance mutex_rep_timeless : Timeless3 mutex_rep.
   *)
-  #[global] Declare Instance mutex_rep_typed : forall {HAS_THREADS : HasStdThreads Σ} {σ : genv}, Typed3 "std::mutex" mutex_rep.
+  #[global] Declare Instance mutex_rep_typed : forall {HAS_THREADS : HasStdThreads Σ} {σ : genv}, Typed3 "std::mutex" R.
 
   (* TODO: index this by the specific mutex! Either via a mutex_gname or by making this a Rep *)
   (* TODO: why is this separate from [mutex_rep] *)
@@ -33,7 +34,7 @@ Section with_cpp.
   #[global] Declare Instance mutex_token_timeless : Timeless2 mutex_token.
   *)
   #[global] Declare Instance mutex_rep_learnable : forall {HAS_THREADS : HasStdThreads Σ} {σ : genv},
-      Cbn (Learn (learn_eq ==> any ==> learn_eq ==> learn_hints.fin) mutex_rep).
+      Cbn (Learn (learn_eq ==> any ==> learn_eq ==> learn_hints.fin) R).
 
 
   (** A resource enforcing that the thread calling unlock must be the same thread
@@ -66,36 +67,35 @@ Section with_cpp.
 
   cpp.spec "std::mutex::mutex()" as ctor_spec with
       (\this this
-      \with R
-      \pre ▷R
-      \post Exists g, this |-> mutex_rep g 1$m R ** mutex_token g 1$m).
+      \pre{P} ▷P
+      \post Exists g, this |-> R g 1$m P ** mutex_token g 1$m).
 
   cpp.spec "std::mutex::lock()" as lock_spec with
       (\this this
-      \prepost{q R g} this |-> mutex_rep g q R (* part of both pre and post *)
+      \prepost{q P g} this |-> R g q P (* part of both pre and post *)
       \persist{thr} current_thread thr
       \pre mutex_token g q
-      \post R ** mutex_locked g thr).
+      \post P ** mutex_locked g thr).
 
   cpp.spec "std::mutex::try_lock()" as try_lock_spec with
       (\this this
-      \prepost{q R g} this |-> mutex_rep g q R (* part of both pre and post *)
+      \prepost{q P g} this |-> R g q P (* part of both pre and post *)
       \prepost{i} current_thread i
       \pre mutex_token g q
-      \post{b}[Vbool b] if b then R ** mutex_locked g i else mutex_token g q).
+      \post{b}[Vbool b] if b then P ** mutex_locked g i else mutex_token g q).
 
   cpp.spec "std::mutex::unlock()" as unlock_spec with
       (\this this
-      \prepost{q R g} this |-> mutex_rep g q R (* part of both pre and post *)
+      \prepost{q P g} this |-> R g q P (* part of both pre and post *)
       \persist{thr} current_thread thr
       \pre mutex_locked g thr
-      \pre ▷R
+      \pre ▷P
       \post mutex_token g q).
 
   cpp.spec "std::mutex::~mutex()" as dtor_spec with
       (\this this
-      \pre{g R} this |-> mutex_rep g 1$m R ** mutex_token g 1$m
-      \post R).
+      \pre{g P} this |-> R g 1$m P ** mutex_token g 1$m
+      \post P).
 
 End with_cpp.
 End mutex.
@@ -103,8 +103,6 @@ End mutex.
 Module recursive_mutex.
 Section with_cpp.
   Context `{Σ : cpp_logic} `{MOD : source ⊧ σ}.
-
-
 
   (* NOTE: Invariant used to protect resource [r]
     inv (r \\// exists th n, locked th (S n)) *)
