@@ -107,16 +107,21 @@ Section specs.
     specify {| info_name := (Nscoped ("std::shared_ptr".<<Atype ty>>) (Nctor [Tptr ty])).<<Atype ty, Atype "void">>
             ; info_type := tCtor ("std::shared_ptr".<<Atype ty>>) [Tptr ty] |} (fun (this:ptr) =>
     \arg{p:ptr} "ownedPtr" (Vptr p)
+    \pre{Rpiece: nat -> Rep} [∗ list] ctid ∈ allButFirstPieceId, p |-> Rpiece ctid
+    (* ^ morally, the caller gives up all the pieces and gets back the 0th piece. The remaining pieces get stored in the invariant.
+       Should this object be destructed immediately, the destructor will need all the pieces to call delete. 
+       We frame away the 0th piece in this spec. A derived spec can be proven where that framing away is not done *)
     \pre{p} dynAllocatedR ty p
-    \pre{Rpiece: nat -> Rep} [∗ list] ctid ∈ allButFirstPieceId,
-      p |-> Rpiece ctid
+    (* ^ gets stored in the invariant. only gets taken out when the count becomes 0, to call delete. at that time the ownership of all other pieces are also taken out from the invariant *)
     \pre [|([∗ list] ctid ∈ allPieceIds, Rpiece ctid)
              |-- anyR ty 1  |]
     (*           ^^ if anyR is not meaningful for non-scalar types,
                  replace this with wp of default destructor *)
     \post Exists (ctrlBlockId: CtrlBlockId),
        this |-> SharedPtrR ctrlBlockId Rpiece p
-       ** ([∗ list] ctid ∈ allButFirstPieceId, pieceRight ctrlBlockId ctid)).
+         ** ([∗ list] ctid ∈ allButFirstPieceId, pieceRight ctrlBlockId ctid)
+         (*  ^ the right to create [maxContention-1] more shared_ptr objects on this payload and claim the correponsing Rpiece ownerships at copy construction *)
+      ).
 
   Definition SpecFor_init_ctor := RegisterSpec init_ctor.
   #[global] Existing Instance SpecFor_init_ctor.
