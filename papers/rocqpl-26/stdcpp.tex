@@ -1,0 +1,359 @@
+%%
+%% This is file `sample-sigplan.tex',
+%% generated with the docstrip utility.
+%%
+%% The original source files were:
+%%
+%% samples.dtx  (with options: `all,proceedings,bibtex,sigplan')
+%% 
+%% IMPORTANT NOTICE:
+%% 
+%% For the copyright see the source file.
+%% 
+%% Any modified versions of this file must be renamed
+%% with new filenames distinct from sample-sigplan.tex.
+%% 
+%% For distribution of the original source see the terms
+%% for copying and modification in the file samples.dtx.
+%% 
+%% This generated file may be distributed as long as the
+%% original source files, as listed above, are part of the
+%% same distribution. (The sources need not necessarily be
+%% in the same archive or directory.)
+%%
+%%
+%% Commands for TeXCount
+%TC:macro \cite [option:text,text]
+%TC:macro \citep [option:text,text]
+%TC:macro \citet [option:text,text]
+%TC:envir table 0 1
+%TC:envir table* 0 1
+%TC:envir tabular [ignore] word
+%TC:envir displaymath 0 word
+%TC:envir math 0 word
+%TC:envir comment 0 0
+%%
+%% The first command in your LaTeX source must be the \documentclass
+%% command.
+%%
+%% For submission and review of your manuscript please change the
+%% command to \documentclass[manuscript, screen, review]{acmart}.
+%%
+%% When submitting camera ready or to TAPS, please change the command
+%% to \documentclass[sigconf]{acmart} or whichever template is required
+%% for your publication.
+%%
+%%
+\documentclass[sigplan,screen]{acmart}
+\usepackage{iris}
+\usepackage{mathpartir}
+
+%https://tex.stackexchange.com/questions/78187/is-there-another-symbol-that-is-slightly-different-from-forall-likewise-for-e
+\makeatletter
+\newcommand*{\fforall}{%
+	{\mathpalette\fforallAux{}}%
+}
+\newcommand*{\fforallAuxx}[1]{%
+	\sbox0{$\m@th#1\forall$}%
+	\sbox2{%
+		\rlap{%
+			\raisebox{\depth}{$\m@th#1\backslash$}%
+		}%
+		\kern\ht0 %
+	}%
+	\sbox2{\resizebox{\ht2}{\height}{\copy2}}%
+	\sbox2{\resizebox{!}{\ht0}{\copy2}}%
+	\wd2=0pt %
+	\copy2
+	\forall
+}
+\newsavebox\forallBox
+\newdimen\forallLineWidth
+\newdimen\forallSep
+\newcommand*{\fforallAux}[1]{%
+	\sbox\forallBox{$\m@th#1\forall$}%
+	\setlength{\forallLineWidth}{.06\wd\forallBox}%
+	\setlength{\forallSep}{.09\wd\forallBox}%
+	\tikz[
+	inner sep=0pt,
+	line cap=round,
+	line width=\forallLineWidth,
+	]
+	\draw
+	(0,0) node (A) {\copy\forallBox}
+	(A.south) ++(-\forallSep-\forallLineWidth,.4\forallLineWidth)
+	coordinate (A1)
+	(A.north west) ++(-\forallSep,-\forallLineWidth)
+	coordinate (A2)
+	(A1) -- (A2)
+	;%
+}
+\makeatother
+
+%%
+%% \BibTeX command to typeset BibTeX logo in the docs
+\AtBeginDocument{%
+  \providecommand\BibTeX{{%
+    Bib\TeX}}}
+
+%% Rights management information.  This information is sent to you
+%% when you complete the rights form.  These commands have SAMPLE
+%% values in them; it is your responsibility as an author to replace
+%% the commands and values with those provided to you when you
+%% complete the rights form.
+\setcopyright{acmlicensed}
+\copyrightyear{2018}
+\acmYear{2018}
+\acmDOI{XXXXXXX.XXXXXXX}
+%% These commands are for a PROCEEDINGS abstract or paper.
+\acmConference[RocqPL '26]{Make sure to enter the correct
+  conference title from your rights confirmation email}{June 03--05,
+  2018}{Woodstock, NY}
+%%
+%%  Uncomment \acmBooktitle if the title of the proceedings is different
+%%  from ``Proceedings of ...''!
+%%
+%%\acmBooktitle{Woodstock '18: ACM Symposium on Neural Gaze Detection,
+%%  June 03--05, 2018, Woodstock, NY}
+\acmISBN{978-1-4503-XXXX-X/2018/06}
+
+
+%%
+%% Submission ID.
+%% Use this when submitting an article to a sponsored event. You'll
+%% receive a unique submission ID from the organizers
+%% of the event, and this ID should be used as the parameter to this command.
+%%\acmSubmissionID{123-A56-BU3}
+
+%%
+%% For managing citations, it is recommended to use bibliography
+%% files in BibTeX format.
+%%
+%% You can then either use BibTeX with the ACM-Reference-Format style,
+%% or BibLaTeX with the acmnumeric or acmauthoryear sytles, that include
+%% support for advanced citation of software artefact from the
+%% biblatex-software package, also separately available on CTAN.
+%%
+%% Look at the sample-*-biblatex.tex files for templates showcasing
+%% the biblatex styles.
+%%
+
+%%
+%% The majority of ACM publications use numbered citations and
+%% references.  The command \citestyle{authoryear} switches to the
+%% "author year" style.
+%%
+%% If you are preparing content for an event
+%% sponsored by ACM SIGGRAPH, you must use the "author year" style of
+%% citations and references.
+%% Uncommenting
+%% the next command will enable that style.
+%%\citestyle{acmauthoryear}
+
+
+%%
+%% end of the preamble, start of the body of the document source.
+\begin{document}
+
+%%
+%% The "title" command has an optional parameter,
+%% allowing the author to define a "short title" to be used in page headers.
+\title{Recursive Mutexes in Separation Logic}
+
+%%
+%% The "author" command and its associated commands are used to define
+%% the authors and their affiliations.
+%% Of note is the shared affiliation of the first two authors, and the
+%% "authornote" and "authornotemark" commands
+%% used to denote shared contribution to the research.
+\author{Ke Du}
+\email{kdu9@uic.edu}
+\orcid{1234-5678-9012}
+\affiliation{%
+  \institution{University of Illinois Chicago}
+  \city{Chicago}
+  \state{Illinois}
+  \country{USA}
+}
+
+\author{Paolo G. Giarrusso}
+\email{paolo@skylabs-ai.com}
+\orcid{1234-5678-9012}
+\affiliation{%
+  \institution{Skylabs AI}
+  \city{}
+  \state{}
+  \country{}
+}
+
+\author{Gregory Malecha}
+\email{gregory@skylabs-ai.com}
+\orcid{1234-5678-9012}
+\affiliation{%
+  \institution{Skylabs AI}
+  \city{}
+  \state{}
+  \country{}
+}
+
+\author{William Mansky}
+\email{mansky1@uic.edu}
+\orcid{1234-5678-9012}
+\affiliation{%
+  \institution{University of Illinois Chicago}
+  \city{Chicago}
+  \state{Illinois}
+  \country{USA}
+}
+
+%%
+%% By default, the full list of authors will be used in the page
+%% headers. Often, this list is too long, and will overlap
+%% other information printed in the page headers. This command allows
+%% the author to define a more concise list
+%% of authors' names for this purpose.
+\renewcommand{\shortauthors}{Du et al.}
+
+\newcommand{\mutexR}{\ensuremath{\mathsf{rmutex}}}
+
+%%
+%% The abstract is a short summary of the work to be presented in the
+%% article.
+\begin{abstract}
+  Motivated by ??? and building on the state-of-the-art in program verification, we embark on a quest to formally reason about the C++ standard library.
+  Reasoning about C++ code is complex due to the nature of templates, default parameters, and ....
+  Building on the BRiCk program logic for C++, we develop a specification of recursive mutexes that is compatible with the informal specifications from the standard.
+  These specifications include several caveats that are not present in more traditional specifications of mutexes developed in the academic literature including: a thread-specific specification that requires the acquirer to also be the releaser, a requirement that the mutex be unlocked at destruction, and a recursive specification enabling the same thread to call acquire multiple times without triggering a deadlock.
+  These features are common in mainstream object-oriented languages such as C++ and Java.
+
+
+%% Mutexes (i.e., locks) are well understood in separation logic, and can be specified in terms of either protecting an invariant or atomically changing the state of the lock. In this abstract, we develop the same styles of specifications for \emph{recursive} mutexes, a common variant of mutexes in object-oriented languages like C++ and Java. We show that ...
+\end{abstract}
+
+%%
+%% The code below is generated by the tool at http://dl.acm.org/ccs.cfm.
+%% Please copy and paste the code instead of the example below.
+%%
+\begin{CCSXML}
+<ccs2012>
+<concept>
+<concept_id>10003752.10010124.10010138.10010142</concept_id>
+<concept_desc>Theory of computation~Program verification</concept_desc>
+<concept_significance>500</concept_significance>
+</concept>
+</ccs2012>
+\end{CCSXML}
+
+\ccsdesc[500]{Theory of computation~Program verification}
+
+%%
+%% Keywords. The author(s) should pick words that accurately describe
+%% the work being presented. Separate the keywords with commas.
+\keywords{concurrent separation logic, C++}
+
+%%
+%% This command processes the author and affiliation and title
+%% information and builds the first part of the formatted document.
+\maketitle
+
+\section{Introduction}
+Languages live and die by their libraries, but the specification of these libraries is often left to users of verification tools.
+The C++ standard library (n4860) comes in at 1595 pages (excluding the appendix), but less than 500 of these pages are dedicated to the semantics of the language itself.
+The remaining roughly 1000 pages describe the C++ standard library which includes functionality ranging from atomics and smart pointers to collections and iterators.
+These libraries are used pervasively throughout the C++ ecosystem and represent a critical barrier to the practical application of verification to mainstream C++ code.
+
+In this work, we introduce an effort to remedy this shortcoming by applying state-of-the-art formal methods to the C++ standard library.
+Our work builds on the BRiCk program logic for C++ which builds on Rocq and the Iris framework to provide modular, axiomatic, reasoning principles for the core language.
+In BRiCk, specifications are written directly in separation logic, and we use the expressivity provided by Iris to capture subtle complexities of the standard library, e.g. thread-subjective specifications and ???.
+
+Even the specification of the standard library is quite subtle due to the low-level, and highly-optimized, nature of the library.
+Implementation techniques such as templates, inheritence, and meta-programming, coupled with operator overloading and implicit casts, make uses of the library
+Despite, and perhaps because, of this, the C++ library has been remarkably resilient and adaptive evolving to support new programming paradigms such as ranges, and new language features such as C++'s extended value categories.
+
+In this work, we focus on our initial foray into the concurrency library by presenting our specification of recursive mutexes.
+
+
+
+Mechanized concurrent separation logic has advanced to the stage where we can prove correctness of programs in real languages, using tools like VST~\cite{vst}, BRiCk~\cite{brick}, or RustBelt~\cite{rustbelt}. One way of making this useful to programmers is to verify commonly-used concurrency infrastructure in those languages (e.g., the ARC in Rust), thus increasing the assurance of a wide swath of real-world code. Here, we report our progresson on an effort to verify C++'s concurrency support library~\cite{} using BRiCk. Some parts of this library, like mutexes and thread creation, are familiar from prior work in Iris, but there are also many patterns that are commonplace in C++ but have not previously been analyzed in separation logic. In this abstract, we specifically address \emph{recursive mutexes}.
+
+The recursive mutex is a variant of the standard mutex/lock that can be acquired multiple times by the same thread, and must be released the same number of times before it becomes available to other threads. This allows methods to acquire a lock before using the associated resources, whether or not the calling thread already owns the lock, as long as they release it before returning. (example, further motivation).
+
+\section{TaDA-style lock specifications}
+There are two common styles of CSL lock specification, which have been proved to be equivalent~\cite{}: invariant-based, and logically atomic (sometimes called TaDA-style~\cite{tada}). In the invariant style, a lock $\ell$ protects an invariant $P$ (represented as $\mathsf{is\_lock}(\ell, P)$), and acquire and release are specified as:
+\begin{mathpar}
+\{\mathsf{is\_lock}(\ell, P\}\ \texttt{acquire}(\ell)\ \{\mathsf{is\_lock}(\ell, P) \ast P\}
+
+\{\mathsf{is\_lock}(\ell, P\} \ast P\}\ \texttt{release}(\ell)\ \{\mathsf{is\_lock}(\ell, P)\}
+\end{mathpar}
+In the atomic style, a lock is simply in one of two states, represented by e.g. a boolean that is $\mathsf{true}$ when the lock is held. Then acquire and release can be specified as:
+\begin{mathpar}
+\fforall b.\ \langle \mathsf{lock\_state}(\ell, b)\rangle\ \texttt{acquire}(\ell)\ \langle \neg b \ast \mathsf{lock\_state}(\ell, \mathsf{true})\rangle
+
+\langle \mathsf{lock\_state}(\ell, \mathsf{true})\rangle\ \texttt{release}(\ell)\ \langle \mathsf{lock\_state}(\ell, \mathsf{false})\rangle
+\end{mathpar}
+While one thread is trying to acquire the lock, its state is unknown and may shift back and forth due to the behavior of other threads; at the lock's linearization point, we observe that the lock is not held ($\neg b$), and shift it to the held state ($\mathsf{true}$). By combining these specifications with a global invariant of the form $P \vee \mathsf{lock\_state}(\ell, \mathsf{true})$, we can derive the invariant-style specs: an acquiring thread trades its ownership of the lock $\mathsf{lock\_state}(\ell, \mathsf{true})$ for the invariant $P$, and then returns it before releasing the lock. (Less obviously, the TaDA-style specs can also be derived from invariant-style specs, using an invariant that is simply a ghost variable indicating the state $b$ of the lock; see \citet{} for more details.)
+
+We begin by stating a logically atomic spec for recursive mutexes. The key points are:
+\begin{itemize}
+\item A fractional \emph{handle} $\ell \mapsto_q \mutexR\ \gamma$ that is held by each thread that knows about the recursive mutex $\gamma$.
+\item A predicate $\mathsf{locked}\ \gamma\ t\ n$ indicating that thread $t$ has acquired mutex $\gamma$ $n$ times. When $n$ is 0, $t$ does not hold the mutex; when $n$ is greater than 0, it does.
+\end{itemize}
+The mutual exclusion property is reflected by the fact that $\mathsf{locked}\ \gamma\ t_1\ n_1 \ast \mathsf{locked}\ \gamma\ t_2\ n_2 \vdash n_1 = 0 \vee n_2 = 0$, i.e., at most one thread holds the mutex at a time.
+Furthermore, it is vital that there is only one $\mathsf{locked}$ predicate per thread; otherwise, %I forget why this is important
+. Thus, the $\mathsf{locked}$ predicate must also satisfy $\mathsf{locked}\ \gamma\ t\ n_1 \ast \mathsf{locked}\ \gamma\ t\ n_2 \vdash \mathsf{False}$. %other important details...
+
+The specifications for the recursive mutex functions are then simply:
+\begin{mathpar}
+\fforall n.\ \langle \ell \mapsto_q \mutexR\ \gamma \ast \mathsf{cur\_thread}(t) \ |\ \mathsf{locked}\ \gamma\ t\ n\rangle \vspace{-.8em}\\ \vspace{-.8em}
+\texttt{acquire}(\ell)\\ \langle \ell \mapsto_q \mutexR\ \gamma \ast \mathsf{cur\_thread}(t) \ |\ \mathsf{locked}\ \gamma\ t\ (n + 1)\rangle
+
+\fforall n.\ \langle \ell \mapsto_q \mutexR\ \gamma \ast \mathsf{cur\_thread}(t) \ |\ \mathsf{locked}\ \gamma\ t\ (n + 1)\rangle \vspace{-.8em}\\ \vspace{-.8em} \texttt{release}(\ell)\\ \langle \ell \mapsto_q \mutexR\ \gamma \ast \mathsf{cur\_thread}(t) \ |\ \mathsf{locked}\ \gamma\ t\ n\rangle
+\end{mathpar}
+\noindent The functions have the same effect regardless of whether $t$ already holds the mutex. 
+
+\section{Deriving an invariant-based lock specification}
+From a programmer's perspective, the key feature of a recursive mutex is that we hold the protected resources after acquiring it, whether or not we held them before. Thus, our invariant-based specs should let us conclude that we own the invariant after a call to \texttt{acquire} without requiring case analysis on whether we already hold the lock.
+
+A simple TaDA-style lock $\ell$ can be associated with resources $P$ via an invariant of the form $\knowInv{}{\exists b.\ \mathsf{lock\_state}(\ell, b) \ast (P \vee b = \mathsf{true})}$. If the lock is not held ($b = \mathsf{false}$), the invariant owns the resources $P$; if it is held ($b = \mathsf{true}$), then the invariant does not own $P$. Then upon acquiring the lock a thread can take $P$ out of the invariant, and upon release must return $P$ to the invariant. We use the same pattern for our recursive mutex:
+\begin{mathpar}
+\knowInv{}{\exists n.\ \ownGhost{}{\authfull n} \ast ((n = 0 \ast P \ast \ownGhost{}{\authfrag n}) \vee (n > 0 \ast \exists t.\ \mathsf{locked}\ \gamma\ t\ n))}
+\end{mathpar}
+Broadly, either the mutex is not held ($n = 0$) and the invariant owns $P$, or the mutex is held by some thread ($n > 0$) and the invariant does not own $P$. The main difference from the simple lock is that each thread that does not currently hold the mutex has its own $\mathsf{locked}\ \gamma\ u\ 0$ assertion outside of the invariant, and that we use a piece of authoritative ghost state to track the number of times the mutex is currently held, which belongs to the invariant when the mutex is not held and to the holding thread when it is. A thread's interface to the mutex is an assertion $\mathsf{holds}\ \gamma\ t\ n\ P$, representing the fact that thread $t$ holds the mutex $\gamma$ protecting resource $P$ $n$ times. We can define this as:
+\begin{mathpar}
+(P \ast \ownGhost{}{\authfrag n}) \vee (n = 0 \ast \mathsf{locked}\ \gamma\ t\ 0)
+\end{mathpar}
+Each thread $t$ participating in the mutex knows the number of times $n$ it holds the mutex. If that number is not 0, then $t$ holds the mutex, owning both $P$ and the ghost state $\ownGhost{}{\authfrag n}$ tracking the number of times the mutex is held (which is exactly the number of times $t$ holds it). If $n$ is 0, then $t$ only holds $\mathsf{locked}\ \gamma\ t\ 0$, the knowledge that it does not hold the lock.
+
+From these definitions and the TaDA-style specs, we can derive invariant-style specs for the recursive mutex:
+\begin{mathpar}
+\{\mathsf{rmutex\_inv} \ast \ell \mapsto \mutexR\ \gamma\ q \ast \mathsf{holds}\ \gamma\ t\ n\ P\}\vspace{-.8em}\\ \vspace{-.8em}
+\texttt{acquire}(\ell)\\
+\{\mathsf{rmutex\_inv} \ast \ell \mapsto \mutexR\ \gamma\ q \ast \mathsf{holds}\ \gamma\ t\ (n + 1)\ P\}
+
+\{\mathsf{rmutex\_inv} \ast \ell \mapsto \mutexR\ \gamma\ q \ast \mathsf{holds}\ \gamma\ t\ (n + 1)\ P\}\vspace{-.8em}\\ \vspace{-.8em}
+\texttt{release}(\ell)\\
+\{\mathsf{rmutex\_inv} \ast \ell \mapsto \mutexR\ \gamma\ q \ast \mathsf{holds}\ \gamma\ t\ n\ P\}
+\end{mathpar}
+\noindent These specifications implicitly say that if $n$ was 0 before an \texttt{acquire}, then afterwards $t$ gains ownership of $P$, and if $n$ is 0 after a \texttt{release}, then $t$ gave up ownership of $P$. However, these are not special cases in the specs---instead, threads may free acquire and release $\ell$, incrementing and decrementing their counts $n$, and then extract $P$ from $\mathsf{holds}$ whenever they can show that $n$ is greater than 0. This allows proofs that follow the standard use pattern of recursive mutexes: whenever a thread needs access to $P$, it first acquires the mutex regardless of whether it already held it, and then releases it once finished, returning it to whatever count $n$ it was at previously.
+
+\section{Example}
+
+%%
+%% The acknowledgments section is defined using the "acks" environment
+%% (and NOT an unnumbered section). This ensures the proper
+%% identification of the section in the article metadata, and the
+%% consistent spelling of the heading.
+\begin{acks}
+
+\end{acks}
+
+%%
+%% The next two lines define the bibliography style to be used, and
+%% the bibliography file.
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{bibfile}
+
+\end{document}
+\endinput
+%%
+%% End of file `sample-sigplan.tex'.

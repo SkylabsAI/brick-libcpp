@@ -1,0 +1,380 @@
+%%
+%% This is file `sample-sigplan.tex',
+%% generated with the docstrip utility.
+%%
+%% The original source files were:
+%%
+%% samples.dtx  (with options: `all,proceedings,bibtex,sigplan')
+%% 
+%% IMPORTANT NOTICE:
+%% 
+%% For the copyright see the source file.
+%% 
+%% Any modified versions of this file must be renamed
+%% with new filenames distinct from sample-sigplan.tex.
+%% 
+%% For distribution of the original source see the terms
+%% for copying and modification in the file samples.dtx.
+%% 
+%% This generated file may be distributed as long as the
+%% original source files, as listed above, are part of the
+%% same distribution. (The sources need not necessarily be
+%% in the same archive or directory.)
+%%
+%%
+%% Commands for TeXCount
+%TC:macro \cite [option:text,text]
+%TC:macro \citep [option:text,text]
+%TC:macro \citet [option:text,text]
+%TC:envir table 0 1
+%TC:envir table* 0 1
+%TC:envir tabular [ignore] word
+%TC:envir displaymath 0 word
+%TC:envir math 0 word
+%TC:envir comment 0 0
+%%
+%% The first command in your LaTeX source must be the \documentclass
+%% command.
+%%
+%% For submission and review of your manuscript please change the
+%% command to \documentclass[manuscript, screen, review]{acmart}.
+%%
+%% When submitting camera ready or to TAPS, please change the command
+%% to \documentclass[sigconf]{acmart} or whichever template is required
+%% for your publication.
+%%
+%%
+\documentclass[sigplan,screen]{acmart}
+\usepackage{iris}
+\usepackage{mathpartir}
+\usepackage{cleveref}
+
+%https://tex.stackexchange.com/questions/78187/is-there-another-symbol-that-is-slightly-different-from-forall-likewise-for-e
+\makeatletter
+\newcommand*{\fforall}{%
+	{\mathpalette\fforallAux{}}%
+}
+\newcommand*{\fforallAuxx}[1]{%
+	\sbox0{$\m@th#1\forall$}%
+	\sbox2{%
+		\rlap{%
+			\raisebox{\depth}{$\m@th#1\backslash$}%
+		}%
+		\kern\ht0 %
+	}%
+	\sbox2{\resizebox{\ht2}{\height}{\copy2}}%
+	\sbox2{\resizebox{!}{\ht0}{\copy2}}%
+	\wd2=0pt %
+	\copy2
+	\forall
+}
+\newsavebox\forallBox
+\newdimen\forallLineWidth
+\newdimen\forallSep
+\newcommand*{\fforallAux}[1]{%
+	\sbox\forallBox{$\m@th#1\forall$}%
+	\setlength{\forallLineWidth}{.06\wd\forallBox}%
+	\setlength{\forallSep}{.09\wd\forallBox}%
+	\tikz[
+	inner sep=0pt,
+	line cap=round,
+	line width=\forallLineWidth,
+	]
+	\draw
+	(0,0) node (A) {\copy\forallBox}
+	(A.south) ++(-\forallSep-\forallLineWidth,.4\forallLineWidth)
+	coordinate (A1)
+	(A.north west) ++(-\forallSep,-\forallLineWidth)
+	coordinate (A2)
+	(A1) -- (A2)
+	;%
+}
+\makeatother
+
+%%
+%% \BibTeX command to typeset BibTeX logo in the docs
+\AtBeginDocument{%
+  \providecommand\BibTeX{{%
+    Bib\TeX}}}
+
+%% Rights management information.  This information is sent to you
+%% when you complete the rights form.  These commands have SAMPLE
+%% values in them; it is your responsibility as an author to replace
+%% the commands and values with those provided to you when you
+%% complete the rights form.
+\setcopyright{acmlicensed}
+\copyrightyear{2018}
+\acmYear{2018}
+\acmDOI{XXXXXXX.XXXXXXX}
+%% These commands are for a PROCEEDINGS abstract or paper.
+\acmConference[RocqPL '26]{Rocq for Programming Languages}{June 03--05,
+  2018}{Woodstock, NY}
+%%
+%%  Uncomment \acmBooktitle if the title of the proceedings is different
+%%  from ``Proceedings of ...''!
+%%
+%%\acmBooktitle{Woodstock '18: ACM Symposium on Neural Gaze Detection,
+%%  June 03--05, 2018, Woodstock, NY}
+\acmISBN{978-1-4503-XXXX-X/2018/06}
+
+
+%%
+%% Submission ID.
+%% Use this when submitting an article to a sponsored event. You'll
+%% receive a unique submission ID from the organizers
+%% of the event, and this ID should be used as the parameter to this command.
+%%\acmSubmissionID{123-A56-BU3}
+
+%%
+%% For managing citations, it is recommended to use bibliography
+%% files in BibTeX format.
+%%
+%% You can then either use BibTeX with the ACM-Reference-Format style,
+%% or BibLaTeX with the acmnumeric or acmauthoryear sytles, that include
+%% support for advanced citation of software artefact from the
+%% biblatex-software package, also separately available on CTAN.
+%%
+%% Look at the sample-*-biblatex.tex files for templates showcasing
+%% the biblatex styles.
+%%
+
+%%
+%% The majority of ACM publications use numbered citations and
+%% references.  The command \citestyle{authoryear} switches to the
+%% "author year" style.
+%%
+%% If you are preparing content for an event
+%% sponsored by ACM SIGGRAPH, you must use the "author year" style of
+%% citations and references.
+%% Uncommenting
+%% the next command will enable that style.
+%%\citestyle{acmauthoryear}
+
+
+%%
+%% end of the preamble, start of the body of the document source.
+\begin{document}
+
+%%
+%% The "title" command has an optional parameter,
+%% allowing the author to define a "short title" to be used in page headers.
+\title{Recursive Mutexes in Separation Logic}
+
+%%
+%% The "author" command and its associated commands are used to define
+%% the authors and their affiliations.
+%% Of note is the shared affiliation of the first two authors, and the
+%% "authornote" and "authornotemark" commands
+%% used to denote shared contribution to the research.
+\author{Ke Du}
+\email{kdu9@uic.edu}
+\orcid{0009-0008-2465-1082}
+\affiliation{%
+  \institution{University of Illinois Chicago}
+  \city{Chicago}
+  \state{Illinois}
+  \country{USA}
+}
+
+\author{William Mansky}
+\email{mansky1@uic.edu}
+\orcid{0000-0002-5351-895X}
+\affiliation{%
+  \institution{University of Illinois Chicago}
+  \city{Chicago}
+  \state{Illinois}
+  \country{USA}
+}
+
+\author{Paolo G. Giarrusso}
+\email{paolo@skylabs-ai.com}
+%\orcid{1234-5678-9012}
+\affiliation{%
+  \institution{Skylabs AI}
+  \city{}
+  \state{}
+  \country{}
+}
+
+\author{Gregory Malecha}
+\email{gregory@skylabs-ai.com}
+\orcid{0000-0003-3952-0807}
+\affiliation{%
+  \institution{Skylabs AI}
+  \city{}
+  \state{}
+  \country{}
+}
+
+%%
+%% By default, the full list of authors will be used in the page
+%% headers. Often, this list is too long, and will overlap
+%% other information printed in the page headers. This command allows
+%% the author to define a more concise list
+%% of authors' names for this purpose.
+\renewcommand{\shortauthors}{Du et al.}
+
+\newcommand{\mutexR}{\ensuremath{\mathsf{rmutex}}}
+
+%%
+%% The abstract is a short summary of the work to be presented in the
+%% article.
+\begin{abstract}
+Mutexes (i.e., locks) are well understood in separation logic, and can be specified in terms of either protecting an invariant or atomically changing the state of the lock. In this abstract, we develop the same styles of specifications for \emph{recursive} mutexes, a common variant of mutexes in object-oriented languages such as C++ and Java. A recursive mutex can be acquired any number of times by the same thread, and our specifications treat all acquires/releases uniformly, with clients only needing to determine whether they hold the mutex when accessing the lock invariant.
+\end{abstract}
+
+%%
+%% The code below is generated by the tool at http://dl.acm.org/ccs.cfm.
+%% Please copy and paste the code instead of the example below.
+%%
+\begin{CCSXML}
+<ccs2012>
+<concept>
+<concept_id>10003752.10010124.10010138.10010142</concept_id>
+<concept_desc>Theory of computation~Program verification</concept_desc>
+<concept_significance>500</concept_significance>
+</concept>
+</ccs2012>
+\end{CCSXML}
+
+\ccsdesc[500]{Theory of computation~Program verification}
+
+%%
+%% Keywords. The author(s) should pick words that accurately describe
+%% the work being presented. Separate the keywords with commas.
+\keywords{concurrent separation logic, C++}
+
+%%
+%% This command processes the author and affiliation and title
+%% information and builds the first part of the formatted document.
+\maketitle
+
+\section{Introduction}
+By now, mechanized concurrent separation logic can prove correct programs in real languages using tools like VST~\cite{vst}, BRiCk~\cite{brick}, or RustBelt~\cite{rustbelt}.
+To enable verifying more programs, specifying and verifying standard libraries is crucial.
+% Verifying commonly-used concurrency infrastructure in those languages (e.g., the
+% ARC in Rust), thus increasing the assurance of a wide swath of real-world code.
+Here, we report our progress on verifying C++'s concurrency library~\cite{ISO:2024:IIP} using BRiCk. While some utilities are standard, others have not been previously
+analyzed in separation logic.
+In particular, we address \emph{recursive mutexes}:
+a thread owning a non-recursive mutex cannot acquire the same mutex again,
+while a thread owning a recursive mutex can acquire it again, as shown in \cref{fig:rec-mutex}.
+Crucially, methods \verb!update_a! and \verb!transfer! are both thread-safe, and
+\verb!transfer! can reuse \verb!update_a! even if both acquire the same mutex!
+With normal mutexes, \verb!transfer! couldn't call \verb!update_a!; typically,
+\verb!transfer! could only call an alternative \verb!update_a_no_lock!.
+To sum up, acquiring a recursive mutex is not just more convenient, but more
+transparent and better encapsulated than using a normal mutex.
+
+% Some parts of this library, like mutexes and thread creation, are familiar from prior work in Iris, but there are also many patterns that are commonplace in C++ but have not.
+
+\begin{figure}[h]
+  \small
+\begin{verbatim}
+class C {
+  int balance_a; int balance_b;
+  std::recursive_mutex mut;
+public:
+  void update_a(int x) {
+    mut.lock(); balance_a += x; mut.unlock();
+  }
+  void update_b(int x) {
+    mut.lock(); balance_b += x; mut.unlock();
+  }
+
+  void transfer(int x) {
+    mut.lock(); update_a(x); update_b(-x); mut.unlock();
+  }
+};
+\end{verbatim}
+  \caption{An example using recursive mutexes.}
+  \label{fig:rec-mutex}
+\end{figure}
+
+In this abstract we give a separation logic specification for recursive mutexes, and show that it enables idiomatic reasoning principles similar to those for regular mutexes.
+%% allows encapsulation reasoning: in particular, a client can acquire a recursive mutex and access its protected resources without doing case analysis on whether they already own the mutex. %+ arguments thing?
+
+\section{Specifying the recursive mutex}
+%skip the atomic version entirely, present the invariant-style specification and a borrowing lemma letting you get P out of holds, then note that it's implemented using a logically atomic spec
+The standard separation logic specification for a mutex/lock associates a lock $\ell$ with resources $P$ (the ``lock invariant''), represented as $\ell \mapsto_q \mathsf{lock}(P)$ (where $q$ is an ownership fraction of the lock). The lock functions are then specified by:
+\begin{mathpar}
+\{\ell \mapsto_q \mathsf{lock}(P)\}\ \texttt{lock}(\ell)\ \{\ell \mapsto_q \mathsf{lock}(P) \ast \mathsf{holds}(\ell) \ast P\}
+
+\{\ell \mapsto_q \mathsf{lock}(P)\} \ast \mathsf{holds}(\ell) \ast P\}\ \texttt{unlock}(\ell)\ \{\ell \mapsto_q \mathsf{lock}(P)\}
+\end{mathpar}
+\noindent A thread that acquires the lock gains access to the protected resources, and gives them up upon release. Our goal is to state similar specifications for recursive mutexes. The key points are:
+\begin{itemize}
+\item A fractional handle $\ell \mapsto_q \mutexR\ \gamma\ P$ that is held by each thread that knows about the recursive mutex $\gamma$ with invariant $P$.
+\item A predicate $\mathsf{holds}\ \gamma\ t\ n\ P$ indicating that thread $t$ has acquired mutex $\gamma$ with invariant $P$ $n$ times. When $n$ is 0, $t$ does not hold the mutex; when $n$ is greater than 0, it does, and can borrow $P$ from $\mathsf{holds}\ \gamma\ t\ n\ P$.
+\end{itemize}%We probably don't need P in both \mutexR and \mathsf{holds}.
+The main difference from the simple lock is that every thread that might interact with mutex $\gamma$, whether it currently holds it or not, has its own $\mathsf{holds}\ \gamma\ t\ n\ P$ assertion; $n$ is simply 0 for any thread that does not currently hold the mutex. 
+The mutual exclusion property is captured by
+$$
+\mathsf{holds}\ \gamma\ t_1\ n_1\ P \ast \mathsf{holds}\ \gamma\ t_2\ n_2\ P \vdash n_1 = 0 \vee n_2 = 0
+$$
+Furthermore, it is vital that there is only one $\mathsf{holds}$ predicate per thread; otherwise, a thread could acquire the same lock twice and obtain $\mathsf{holds}\ \gamma\ t\ 1\ P \ast \mathsf{holds}\ \gamma\ t\ 1\ P$, which would permit borrowing two copies of $P$. 
+Thus, the $\mathsf{holds}$ predicate must also satisfy $\mathsf{holds}\ \gamma\ t\ n_1\ P \ast \mathsf{holds}\ \gamma\ t\ n_2\ P \vdash \mathsf{False}$. %other important details...
+
+From a programmer's perspective, the key feature of a recursive mutex is that we hold the protected resources after acquiring it, whether or not we held them before. Thus, our specs should let us conclude that we own the invariant after a call to \texttt{lock} without requiring case analysis on whether we already hold the lock. Our specifications allow this by saying that \texttt{lock} increases $n$ and \texttt{unlock} decreases it:
+\begin{mathpar}
+\{\ell \mapsto \mutexR\ \gamma\ q \ast \mathsf{holds}\ \gamma\ t\ n\ P\}\vspace{-.8em}\\ \vspace{-.8em}
+\texttt{lock}(\ell)\\
+\{\ell \mapsto \mutexR\ \gamma\ q \ast \mathsf{holds}\ \gamma\ t\ (n + 1)\ P\}
+
+\{\ell \mapsto \mutexR\ \gamma\ q \ast \mathsf{holds}\ \gamma\ t\ (n + 1)\ P\}\vspace{-.8em}\\ \vspace{-.8em}
+\texttt{unlock}(\ell)\\
+\{\ell \mapsto \mutexR\ \gamma\ q \ast \mathsf{holds}\ \gamma\ t\ n\ P\}
+\end{mathpar}
+\noindent These specifications implicitly say that if $n$ was 0 before a \texttt{lock}, then afterwards $t$ gains ownership of $P$, and if $n$ is 0 after an \texttt{unlock}, then $t$ gave up ownership of $P$. However, these are not special cases in the specs---instead, threads may freely acquire and release $\ell$, incrementing and decrementing their counts $n$, and then extract $P$ from $\mathsf{holds}$ whenever they can show that $n$ is greater than 0. This allows simple proofs of code that use recursive mutexes idiomatically: whenever a thread needs access to $P$, it first acquires the mutex regardless of whether it already held it, and then releases it once finished, restoring the count to the value before the process.
+
+The final piece is the ``borrowing'' rule that allows a thread to obtain the invariant $P$ if it holds the lock:
+\begin{align*}
+n > 0 \Rightarrow\ &\ell \mapsto \mutexR\ \gamma\ q \ast \mathsf{holds}\ \gamma\ t\ n\ P \dashv \vdash  \\&\ell \mapsto \mutexR\ \gamma\ q \ast P \ast \mathsf{held}\ \gamma\ t\ n
+\end{align*}
+\noindent A thread can exchange its positive $\mathsf{holds}$ predicate for ownership of $P$, plus a retainer $\mathsf{held}$ that tracks $n$ but does not give access to $P$.
+%  This exchange operation is a view shift because it is implemented via an Iris invariant~\cite{iris}, but this is mostly irrelevant from the user's perspective. % holds is defined as P * held when n>0
+
+ Essentially, while the standard lock acquire spec simultaneously acquires the lock and gives the thread ownership of $P$, our recursive mutex specs separate these operations into two steps, incrementing $n$ on acquire and then letting the thread obtain $P$ at any later point, as long as $n$ is greater than 0. Since $\mathsf{holds}$ is part of the precondition of \texttt{unlock}, the thread must unborrow $P$ before releasing the lock, whether or not the release actually sets $n$ to 0. %more on this, and the fixed-argument trick
+
+\section{Fixing Arguments}
+Lock invariants are usually written with existentially quantified arguments: for instance, a lock that protects the location $x$ may have the invariant $P \eqdef \exists v.\ x \mapsto v$. In this case, the borrowing rule's requirement that return $P$ to $\mathsf{holds}$ before acquiring or releasing the mutex effectively re-quantifies the variable, forcing the thread to lose information about resources it owns. We fix this by packing any such arguments into a tuple $a$, provided as an additional parameter to $\mathsf{holds}$: $\mathsf{holds}\ \gamma\ t\ n\ P\ a$ means that if $n > 0$, then we hold resources $P(a)$, and the argument $a$ will remain the same as long as $n$ remains positive. When $n = 0$, $P$ has returned to the invariant with quantified arguments, and $a$ is ignored. We use this approach to verify the example from \cref{fig:rec-mutex}.
+
+The invariant for the example is \[P(a, b) \eqdef \verb!balance_a! \mapsto a \ast \verb!balance_b! \mapsto b\]
+
+\noindent Our specification for \verb!update_a! is then:
+\begin{mathpar}
+\{\verb!mut! \mapsto \mutexR\ \gamma\ q \ast \mathsf{holds}\ \gamma\ t\ n\ P\ (a, b)\}\vspace{-.8em}\\ \vspace{-.8em}
+\texttt{update\_a}(x)\\
+\{\verb!mut! \mapsto \mutexR\ \gamma\ q \ast \mathsf{holds}\ \gamma\ t\ n\ P\ (a + x, b)\}
+\end{mathpar}
+\noindent and similarly for \verb!update_b!. When a thread calls \verb!update_a!, it gets back the lock with the same $n$ as before the call; if that $n$ is greater than 0 then we know that the new value of \verb!balance_a! is $a + x$, while otherwise we only know that the invariant $\exists a, b.\ P(a, b)$ has been preserved. Since \verb!transfer! begins by acquiring the mutex, we can show that the value of $\verb!balance_a! + \verb!balance_b!$ is preserved by the function.
+
+\section{Discussion}
+We have seen that the recursive mutex specs let us support the common pattern of functions that work equally well whether or not the caller holds the lock before calling, without losing any information about the invariant upon return. In our implementation, the specs are derived from more primitive \emph{logically atomic} specs and an associated invariant, but these details are entirely hidden from the client.
+
+This work is part of our broader effort to verify the C++ standard library. We believe that this project will highlight more reasoning principles that are commonly used in mainstream software engineering.
+Our current specifications include commonly used libraries such as \verb!std::atomic! and \verb!std::vector!.
+We welcome collaboration on this project:
+\begin{center}
+\url{https://github.com/SkylabsAI/brick-libcpp}
+\end{center}
+%%; we also have finished or in-progress work on ...
+
+%%
+%% The acknowledgments section is defined using the "acks" environment
+%% (and NOT an unnumbered section). This ensures the proper
+%% identification of the section in the article metadata, and the
+%% consistent spelling of the heading.
+%% \begin{acks}
+%% \end{acks}
+
+%%
+%% The next two lines define the bibliography style to be used, and
+%% the bibliography file.
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{bibfile}
+
+\end{document}
+\endinput
+%%
+%% End of file `sample-sigplan.tex'.
