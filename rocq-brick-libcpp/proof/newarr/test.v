@@ -12,6 +12,9 @@ Require Import bluerock.cpp.spec.concepts.experimental.
 Require Import bluerock.brick.libcpp.newarr.test_cpp.
 Require Import bluerock.cpp.stdlib.new.hints.
 
+Import linearity.
+Disable Notation "::wpOperand".
+Print new_delete.wp_operand_array_new_glob.
 Section specsproofs.
   Context `{Σ : cpp_logic, MOD:test_cpp.module ⊧ σ}.
 
@@ -20,11 +23,16 @@ Section specsproofs.
       match (size_of _ ty) with
       | Some sz => bookKeepingLoc |-> pred.allocatedR 1 (overhead+sz)
       | None => False
+      end **
+      match ty with
+      | Tint  => [| overhead = 0%N |]
+      | _ =>  True (* TODO: this needs to be strengthened for many cases *)
       end
       **  (base |-> new_token.R 1
                 {| new_token.alloc_ty := ty;
                    new_token.storage_ptr := bookKeepingLoc.["unsigned char" ! overhead];
-                   new_token.overhead := overhead |}).
+                  new_token.overhead := overhead |}).
+  
   cpp.spec "testnew()" as testnewspec with (
     \pre emp
     \post{p:ptr}[Vptr p] dynAllocatedR "int" p ** p |-> primR "int" 1 (Vint 1)
@@ -87,6 +95,32 @@ Section specsproofs.
     go;[ego|].
     Transparent dynAllocatedR.
     go.
+    case_bool_decide; Forward.rwHyps; try go;[].
+    go.
+    normalize_ptrs.
+    go.
+  Qed.
+  
+  cpp.spec "testnewarrdel()" as testnewarrdelspec with (
+        \post emp).
+  
+  Lemma prf2del: verify[module] testnewarrdelspec.
+  Proof using MOD.
+    verify_spec.
+    go;[ego|].
+    Transparent dynAllocatedR.
+    Search arrayR nullptr.
+    go.
+    rewrite arrayR_eq.
+    unfold arrayR_def.
+    go.
+    rewrite arrR_eq.
+    unfold arrR_def.
+    go.
+    case_bool_decide; subst; try go.
+    assert ("int"%cpp_type = "int[2]"%cpp_type) as Hfalse by admit.
+    (* _x_ |-> anyR "int[2]" 1$m *)
+    (* It seems the delete wp or spec is horribly wrong for the case of delete [] *)
   Abort.
 
 End specsproofs.
