@@ -103,6 +103,7 @@ End mutex.
 Module recursive_mutex.
 Section with_cpp.
   Context `{Σ : cpp_logic} `{MOD : source ⊧ σ}.
+  Context {HAS_THREADS : HasStdThreads Σ}.
 
   (* NOTE: Invariant used to protect resource [r]
     inv (r \\// exists th n, locked th (S n)) *)

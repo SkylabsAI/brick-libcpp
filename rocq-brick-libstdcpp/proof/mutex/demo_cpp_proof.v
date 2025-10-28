@@ -51,13 +51,25 @@ Section with_cpp.
   (* TODO make this into a hint *)
   Lemma is_held {t1 t2: recursive_mutex.acquire_state TT} :
     recursive_mutex.acquire t1 t2 ->
-    ∃ n xs, t2 = recursive_mutex.Held n xs /\ match n with O => t1 = recursive_mutex.NotHeld | S n' => t1 = recursive_mutex.Held n' xs end.
+    ∃ n xs, t2 = recursive_mutex.Held n xs /\
+      t1 = recursive_mutex.release t2.
   Proof.
     intros.
     destruct t1; simpl in H; eauto.
     - exists 0. naive_solver.
     - exists (S n). naive_solver.
   Qed.
+
+  #[program]
+  Definition acquireable_is_acquired_C {TT : tele} g th t t' P
+      (_ : recursive_mutex.acquire (TT:=TT) t t') :=
+    \cancelx
+    \consuming recursive_mutex.acquireable g th t' P
+    \deduce{n args} tele_app P args
+    \deduce [| t' = recursive_mutex.Held n args /\ match n with 0 => t = recursive_mutex.NotHeld 
+      | S n' => t = recursive_mutex.Held n' args end |]
+    \end.
+  Next Obligation. Admitted.
 
   Lemma update_a_ok : verify[source] "C::update_a(int)".
   Proof.
