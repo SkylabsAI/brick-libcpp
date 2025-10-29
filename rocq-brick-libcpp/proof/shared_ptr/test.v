@@ -97,9 +97,9 @@ Section proofs.
     pose proof maxContentionLb.
     go.
     unfold dynAllocatedR.
-    iExists _.
     set (Rpiece:=(fun ctid => if bool_decide (ctid=0%nat) then anyR "int" 1 else emp)).
     iExists Rpiece.
+    iExists _.
     go.
     iExists _.
     simpl.
