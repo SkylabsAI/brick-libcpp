@@ -45,7 +45,7 @@ Record CtrlBlockId : Set :=
     dataLoc: ptr;
   }.
 
-Open Scope N_scope.
+#[local] Open Scope N_scope.
 Definition maxContention : positive. Proof. Admitted.
 
 Definition ctrOffset: offset. Proof. Admitted.
@@ -77,7 +77,7 @@ Section specs.
     end.
       
 
-  Definition sptrInv (id: CtrlBlockId) (Rpiece : nat -> Rep) (ownedPtr:ptr) (pieceOut : nat ->bool) :=
+  Definition sptrInv (id: CtrlBlockId) (Rpiece : nat -> Rep) (ownedPtr:ptr) (pieceOut : nat ->bool) : mpred :=
     let ctrVal := countLN pieceOut allPieceIds in
     (dataLoc id),, ctrOffset |-> atomic.R "long" 1 (Z.of_N ctrVal)
          ** (if (bool_decide (ctrVal = 0))
