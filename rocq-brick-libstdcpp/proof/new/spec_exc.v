@@ -27,14 +27,17 @@ Section with_cpp.
   (** <<operator new(size_t)>> is not allowed to return <<nullptr>>, it
       signals failure by raising an exception.
    *)
-  cpp.spec "operator new(size_t)" as new_spec with
+  cpp.spec "operator new(std::size_t)" as new_spec with
       (\arg{sz} "sz"      (Vn sz)
        \post{p}[Vptr p] p |-> (blockR sz 1$m **
                                nonnullR **
                                alignedR STDCPP_DEFAULT_NEW_ALIGNMENT **
                                allocatedR 1 sz)).
 
-  cpp.spec "operator new[](size_t)" as operator_new_array with
+  (** <<operator new[](size_t)>> is not allowed to return <<nullptr>>, it
+      signals failure by raising an exception.
+   *)
+  cpp.spec "operator new[](std::size_t)" as operator_new_array with
       (\arg{sz} "sz" (Vn sz)
        \post{p}[Vptr p]
            p |-> (blockR sz 1$m **

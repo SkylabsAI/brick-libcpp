@@ -78,3 +78,8 @@ NES.End alloc.
    (idtac "<<operator new(size_t)>>'s specification requires exceptions."
           "See [bluerock.brick.libstdcpp.new.spec_exc] for more information about it.";
     exact (SpecFor.mk _ emp)) : typeclass_instances.
+
+#[global] Hint Extern 1000 (SpecFor "operator new[](unsigned long)"%cpp_name _) =>
+  (idtac "<<operator new[](size_t)>>'s specification requires exceptions."
+     "See [bluerock.brick.libstdcpp.new.spec_exc] for more information about it.";
+   exact (SpecFor.mk _ emp)) : typeclass_instances.
