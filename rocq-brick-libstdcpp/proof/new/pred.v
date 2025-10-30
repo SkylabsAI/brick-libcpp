@@ -23,14 +23,26 @@ Section with_cpp.
 
 End with_cpp.
 
+Class IsNotArray (ty : type) : Prop :=
+  { _ : if ty is Tarray _ _ then False else True }.
+#[global] Hint Extern 0 (IsNotArray _) => (constructor; exact I) : typeclass_instances.
+
 NES.Begin alloc.
 
   (** [token ty sz q] bundles the dynamic allocation tokens provided by
       the C++ abstract machine.
    *)
   br.lock
-  Definition token `{Σ : cpp_logic} {σ : genv} (ty : type) (sz : N) (q : Qp) : Rep :=
-    Exists storage_p,
-      new_token.R q {| new_token.alloc_ty := ty ; new_token.storage_ptr := storage_p ; new_token.overhead := 0 |} **
-      pureR (storage_p |-> allocatedR q sz).
+  Definition token `{Σ : cpp_logic} {σ : genv} (ty : type) (q : Qp) : Rep :=
+    Exists storage_p overhead sz,
+      [| size_of _ ty = Some sz |] **
+      new_token.R q {| new_token.alloc_ty := ty ; new_token.storage_ptr := storage_p ; new_token.overhead := overhead |} **
+      pureR (storage_p .[ "unsigned char" ! -overhead ] |-> allocatedR q (overhead + sz)).
+
+  (* TODO: upstream this! *)
+  (** This guarantees that non-array allocations have 0 overhead bytes. *)
+  #[global] Declare Instance new_token_non_array_0_overhead : forall `{Σ : cpp_logic} {σ : genv} ty q storage_p overhead,
+      IsNotArray ty ->
+    Observe [| overhead = 0%N |] (new_token.R q $ new_token.mk ty storage_p overhead).
+
 NES.End alloc.
