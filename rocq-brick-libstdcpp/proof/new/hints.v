@@ -1,18 +1,18 @@
 Require Import bluerock.auto.cpp.proof.
 Require Export bluerock.brick.libstdcpp.new.spec.
 
-#[only(lazy_unfold(global))] derive alloc.token.
+#[only(lazy_unfold(global))] derive alloc.tokenR.
 
 Section with_cpp.
   Context `{Σ : cpp_logic} {σ : genv}.
 
   (** ** Hints for proving [alloc.token] from [new_token.R].
-  
+
      - <<_using_>> hints rely on [size_of _ ty = Some ...] to already be provable, while non
        <<using>> hints introduce this fact.
        This fact is otherwise lost because it is expressed within [alloc.token].
      - <<_0>> lemmas special case for non-array allocations which are common and ensure that
-       the allocation overhead at the C++ level is 0. (Allocation overhead of the allocator-level is 
+       the allocation overhead at the C++ level is 0. (Allocation overhead of the allocator-level is
        separately captured in [allocatedR].)
    *)
   #[program]
@@ -20,18 +20,18 @@ Section with_cpp.
     (_ : size_of _ ty = Some sz) :=
     \cancelx
     \consuming p |-> new_token.R q (new_token.mk ty storage_p overhead)
-    \proving p |-> alloc.token ty q
+    \proving p |-> alloc.tokenR ty q
     \through storage_p .[ Tbyte ! -overhead ] |-> allocatedR q (overhead + sz)
     \end.
   Next Obligation.
-    rewrite alloc.token.unlock. work.
+    rewrite alloc.tokenR.unlock. work.
   Qed.
 
   #[program]
   Definition token_prove_C (p : ptr) q storage_p overhead ty :=
     \cancelx
     \consuming p |-> new_token.R q (new_token.mk ty storage_p overhead)
-    \proving p |-> alloc.token ty q
+    \proving p |-> alloc.tokenR ty q
     \deduce{sz} [| size_of _ ty = Some sz |]
     \through storage_p .[ Tbyte ! -overhead ] |-> allocatedR q (overhead + sz)
     \end.
@@ -39,7 +39,7 @@ Section with_cpp.
     intros; iIntros "X".
     iDestruct (observe [| exists sz, size_of _ _ = _ |] with "X") as "%".
     destruct H; simpl in *.
-    rewrite alloc.token.unlock. iDestruct "X" as "?"; work.
+    rewrite alloc.tokenR.unlock. iDestruct "X" as "?"; work.
   Qed.
 
   (* special cases for the above two hints when the overhead is 0 *)
@@ -48,11 +48,11 @@ Section with_cpp.
     (_ : size_of _ ty = Some sz) :=
     \cancelx
     \consuming p |-> new_token.R q (new_token.mk ty storage_p 0)
-    \proving p |-> alloc.token ty q
+    \proving p |-> alloc.tokenR ty q
     \through storage_p |-> allocatedR q sz
     \end.
   Next Obligation.
-    rewrite alloc.token.unlock. work.
+    rewrite alloc.tokenR.unlock. work.
     normalize_ptrs. iStopProof; f_equiv. f_equiv. lia.
   Qed.
 
@@ -60,7 +60,7 @@ Section with_cpp.
   Definition token_prove_0_C (p : ptr) q storage_p ty :=
     \cancelx
     \consuming p |-> new_token.R q (new_token.mk ty storage_p 0)
-    \proving p |-> alloc.token ty q
+    \proving p |-> alloc.tokenR ty q
     \deduce{sz} [| size_of _ ty = Some sz |]
     \through storage_p |-> allocatedR q sz
     \end.
@@ -68,16 +68,16 @@ Section with_cpp.
     intros; iIntros "X".
     iDestruct (observe [| exists sz, size_of _ _ = _ |] with "X") as "%".
     destruct H; simpl in *.
-    rewrite alloc.token.unlock. iDestruct "X" as "?"; work.
+    rewrite alloc.tokenR.unlock. iDestruct "X" as "?"; work.
     normalize_ptrs. iStopProof; f_equiv; f_equiv; lia.
   Qed.
 
 
   (** ** Hints for proving [new_token.R] *)
   #[program]
-  Definition token_use_non_array_C (p : ptr) ty q (_ : IsNotArray ty) :=
+  Definition token_use_non_array_C (p : ptr) ty q (_ : TCEq (is_array_type ty) false) :=
     \cancelx
-    \consuming p |-> alloc.token (σ:=σ) ty q
+    \consuming p |-> alloc.tokenR (σ:=σ) ty q
     \proving{(storage_p : ptr) overhead} p |-> new_token.R q (new_token.mk ty storage_p overhead)
     \deduce{(storage_p' : ptr) sz} [| size_of _ ty = Some sz |]
     \deduce storage_p' |-> allocatedR q sz
@@ -86,7 +86,7 @@ Section with_cpp.
     \end.
   Next Obligation.
     intros.
-    rewrite alloc.token.unlock.
+    rewrite alloc.tokenR.unlock.
     iIntros "X"; iDestruct "X" as (????) "[X ?]".
     iDestruct (observe [| overhead = 0%N |] with "X") as "%".
     subst. normalize_ptrs.
@@ -98,7 +98,7 @@ Section with_cpp.
   #[program]
   Definition token_use_array_C (p : ptr) ty q :=
     \cancelx
-    \consuming p |-> alloc.token (σ:=σ) ty q
+    \consuming p |-> alloc.tokenR (σ:=σ) ty q
     \proving{(storage_p : ptr) overhead} p |-> new_token.R q (new_token.mk ty storage_p overhead)
     \deduce{(storage_p' : ptr) (overhead' : N) sz} [| size_of _ ty = Some sz |]
     \deduce storage_p' .[ Tbyte ! -overhead' ] |-> allocatedR q (overhead' + sz)
@@ -106,19 +106,19 @@ Section with_cpp.
     \through [| overhead = overhead' |]%N
     \end.
   Next Obligation.
-    rewrite alloc.token.unlock. work.
+    rewrite alloc.tokenR.unlock. work.
     iExists storage_p.
     work.
     iExists overhead. work.
   Qed.
 
   #[global] Instance alloc_token_new_token_learnable ty q q' a b c :
-    Learnable (alloc.token ty q) (new_token.R q' (new_token.mk a b c)) [ty = a].
+    Learnable (alloc.tokenR ty q) (new_token.R q' (new_token.mk a b c)) [ty = a].
   Proof. solve_learnable. Qed.
   #[global] Instance allocatedR_learn : Cbn (Learn (any ==> learn_eq ==> learn_hints.fin) allocatedR).
   Proof. solve_learnable. Qed.
 
-  #[global] Instance token_learn : Cbn (Learn (learn_eq ==> learn_eq ==> any ==> learn_hints.fin) alloc.token).
+  #[global] Instance token_learn : Cbn (Learn (learn_eq ==> learn_eq ==> any ==> learn_hints.fin) alloc.tokenR).
   Proof. solve_learnable. Qed.
 
   (** <<delete nullptr>> hints

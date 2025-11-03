@@ -12,14 +12,14 @@ Section with_cpp.
 
   cpp.spec "test_new()" from demo_cpp.source with
     (\post{p}[Vptr p]
-       p |-> (intR 1$m 0 ** alloc.token "int" 1)).
+       p |-> (intR 1$m 0 ** alloc.tokenR "int" 1)).
 
   Lemma test_new_ok : verify[demo_cpp.source] "test_new()".
   Proof. verify_spec; go. Qed.
 
   cpp.spec "test_delete(int* )" from demo_cpp.source with
     (\arg{p} "p" (Vptr p)
-     \pre{v} p |-> (intR 1$m v ** alloc.token "int" 1)
+     \pre{v} p |-> (intR 1$m v ** alloc.tokenR "int" 1)
      \post emp).
 
   Lemma test_delete_ok : verify[demo_cpp.source] "test_delete(int* )".
@@ -37,13 +37,13 @@ Section with_cpp.
   cpp.spec "test_new_array()" from demo_cpp.source with
     (\post{p}[Vptr p]
       p |-> (arrayLR "int" 0 2 (fun z => intR 1$m z) [1; 2]%Z **
-      alloc.token "int[2]" 1)
+      alloc.tokenR "int[2]" 1)
     ).
 
   cpp.spec "test_delete_array(int* )" from demo_cpp.source with
     (\arg{p} "p" (Vptr p)
      \pre p |-> (arrayLR "int" 0 2 (fun z => intR 1$m z) [1; 2]%Z **
-                 alloc.token "int[2]" 1)
+                 alloc.tokenR "int[2]" 1)
      \post emp
     ).
 
