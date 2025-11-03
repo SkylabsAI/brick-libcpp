@@ -6,6 +6,15 @@ Require Export bluerock.brick.libstdcpp.new.spec.
 Section with_cpp.
   Context `{Σ : cpp_logic} {σ : genv}.
 
+  (** ** Hints for proving [alloc.token] from [new_token.R].
+  
+     - <<_using_>> hints rely on [size_of _ ty = Some ...] to already be provable, while non
+       <<using>> hints introduce this fact.
+       This fact is otherwise lost because it is expressed within [alloc.token].
+     - <<_0>> lemmas special case for non-array allocations which are common and ensure that
+       the allocation overhead at the C++ level is 0. (Allocation overhead of the allocator-level is 
+       separately captured in [allocatedR].)
+   *)
   #[program]
   Definition token_prove_using_C (p : ptr) q storage_p overhead ty sz
     (_ : size_of _ ty = Some sz) :=
@@ -64,6 +73,7 @@ Section with_cpp.
   Qed.
 
 
+  (** ** Hints for proving [new_token.R] *)
   #[program]
   Definition token_use_non_array_C (p : ptr) ty q (_ : IsNotArray ty) :=
     \cancelx
