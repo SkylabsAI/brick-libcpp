@@ -17,7 +17,7 @@ Section with_cpp.
       allocated array, the memory that backs this is **not** part of [allocatedR].
       That memory is owned by the C++ abstract machine.
    *)
-  Parameter allocatedR : forall {σ :genv}, Qp -> N -> Rep.
+  Parameter allocatedR : forall {σ : genv}, Qp -> N -> Rep.
   #[global] Instance: Cbn (Learn (any ==> learn_eq ==> learn_hints.fin) allocatedR).
   Proof. solve_learnable. Qed.
 
