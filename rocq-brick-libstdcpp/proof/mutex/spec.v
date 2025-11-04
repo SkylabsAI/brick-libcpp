@@ -203,11 +203,64 @@ Section with_cpp.
         end
     end.
 
-  Definition acquireable (g : gname) (th : thread_idT) {TT: tele} (n : acquire_state TT) (P : TT -t> mpred) : mpred :=
-    match n with
+  Definition acquireable (g : gname) (th : thread_idT) {TT: tele} (t : acquire_state TT) (P : TT -t> mpred) : mpred :=
+    match t with
     | NotHeld => locked g th 0
     | Held n args => own g (◯E (S n)) ** tele_app P args
     end.
+  
+  #[global] Instance acquireable_learn γ th TT : LearnEq2 (@acquireable γ th TT).
+  Proof. solve_learnable. Qed.
+
+  (* TODO make this into a hint *)
+  Lemma is_held {TT : tele} {t1 t2: acquire_state TT} :
+    acquire t1 t2 ->
+    ∃ n xs, t2 = Held n xs /\
+      t1 = release t2.
+  Proof.
+    intros.
+    destruct t1; simpl in H; eauto.
+    - exists 0. naive_solver.
+    - exists (S n). naive_solver.
+  Qed.
+
+  #[program]
+  Definition acquireable_is_acquired_C {TT : tele} g th t t' P
+      (_ : acquire (TT:=TT) t t') :=
+    \cancelx
+    \consuming acquireable g th t' P
+    \deduce{n args} tele_app P args
+    \deduce [| t' = Held n args /\ t = release t' |]
+    \deduce own g (◯E (S n))
+    \end.
+  Next Obligation.
+    (* TODO use is_held *)
+    intros.
+    rewrite /acquireable.
+    apply is_held in a as (? & ? & -> & ->).
+    go. iExists _, _. go.
+  Qed.
+
+  Definition update {TT : tele} (f : TT -t> TT)
+    (x : acquire_state TT)
+    : acquire_state TT :=
+    match x with
+    | NotHeld => NotHeld
+    | Held n xs => Held n (tele_app f xs)
+    end.
+
+  (* TODO maybe a hint that says
+    TCEq f1 f2 ->
+    acquireable _ _ f1 ⊢ acquireable _ _ f2.
+    *)
+  Lemma update_eq {TT : tele} f t1 t2 : acquire t1 t2 ->
+      update f t1 = release(TT:=TT) (update f t2).
+  Proof.
+    by intros ([|] & ? & -> & ->)%is_held.
+  Qed.
+
+  Opaque release.
+  Opaque acquireable.
 
   (* this is the usable pre-condition *)
   #[ignore_missing]
@@ -234,4 +287,7 @@ Section with_cpp.
      \post acquireable g th (release $ Held n args) P).
 
 End with_cpp.
+ 
+#[global] Hint Resolve acquireable_is_acquired_C : br_hints.
+
 End recursive_mutex.
