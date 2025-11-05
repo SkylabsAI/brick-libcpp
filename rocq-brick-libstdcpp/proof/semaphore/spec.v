@@ -6,6 +6,7 @@ Import auto_frac auto_pick_frac.
 (* TODO: upstream *)
 #[global] Declare Instance inst v n : Refine1 true true (Vint v = Vnat n) [n = Z.to_nat v].
 Section with_cpp.
+  #[local] Open Scope nat_scope.
 
   Context `{Σ : cpp_logic}.
   Context  `{MOD : test_cpp.source ⊧ σ}. (* σ is the whole program *)

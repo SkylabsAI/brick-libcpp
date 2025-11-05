@@ -5,6 +5,8 @@ Require Import bluerock.brick.libstdcpp.semaphore.test_cpp.
 Import auto_frac auto_pick_frac.
 
 Section with_cpp.
+  #[local] Open Scope nat_scope.
+
   Context `{Σ : cpp_logic}.
   Context  `{MOD : test_cpp.source ⊧ σ}. (* σ is the whole program *)
 
