@@ -3,6 +3,12 @@ Require Import bluerock.brick.libstdcpp.mutex.spec.
 Require Import bluerock.brick.libstdcpp.mutex.demo_cpp.
 
 
+(* TODO: generalizable *)
+#[global] Instance own_learn {PROP:bi} `{_ : HasOwn PROP (excl_authR natO)} γ (a b : nat) : Learnable (own γ (◯E a)) (own γ (◯E b)) [a=b].
+Proof. solve_learnable. Qed.
+
+Import auto_frac auto_pick_frac.
+
 Section with_cpp.
   Context `{Σ : cpp_logic}.
   Context `{MOD : source ⊧ σ}. (* σ is the whole program *)
@@ -41,17 +47,15 @@ Section with_cpp.
   Proof.
     verify_spec; go.
     rewrite /CR.
-    iExists _; iExists TT; iExists (P this); iExists q; iExists th.
-    go. ego.
-    (* we know t must be in a held state *)
+    iExists TT; iExists (P this); iExists q; iExists th.
+    go.
     rewrite /P/=.
     destruct args as [a [b []]]; simpl.
     go.
     iSplitR. { admit. (* TODO make the addition modulo arithmetic in the spec *) }
     go.
-    iExists γ; iExists TT; iExists (P this); iExists q; iExists th; iExists n; iExists (mk (_ + x) _).
-    go. rewrite /P. go.
-    rewrite /P. go.
+    iExists TT; iExists (P this); iExists th; iExists (mk (_ + x) _).
+    rewrite /P; go.
     erewrite recursive_mutex.update_eq; last done.
     go.
   Admitted.
@@ -67,41 +71,18 @@ Section with_cpp.
   Proof.
     verify_spec; go.
     rewrite /CR. go.
-    iExists γ; iExists TT; iExists (P this); iExists q; iExists th; iExists _. go.
-    { ego. }
-    iExists γ; iExists q; iExists _; iExists th; go.
-    rewrite /CR.
-
-    Import spec.recursive_mutex.
-    Set Nested Proofs Allowed.
-      #[program]
-    Definition own_P_is_acquireable_C {TT : tele} g th n P args :=
-      \cancelx
-      \consuming tele_app P args
-      \consuming own g (◯E (S n))
-      \deduce acquireable(TT:=TT) g th (Held n args) P
-      \end.
-    Next Obligation.
-      intros.
-      rewrite /acquireable.
-      go.
-    Qed.
-    
-    Hint Resolve own_P_is_acquireable_C : br_hints.
-
-    (* FIXME *)
+    iExists TT; iExists (P this); iExists th; iExists _. go.
+    iExists _; iExists th. go.
+    iExists _; iExists th. go.
+    iSplitL. 2:{ admit. (* TODO make the addition modulo arithmetic in the spec *) }
     go.
-
-    iExists γ; iExists q; iExists _; iExists th; go.
-    iSplitL; [ | admit ].
-    go.
-    (* we know t must be in a held state *)
-    destruct (is_held H) as (n & xs & -> & ?).
-    red in H; subst.
-    iExists γ; iExists TT; iExists (P this); iExists q; iExists th; iExists _; iExists _. go.
-    destruct xs as [a[b[]]]; simpl.
-    have->: (b + (0 - x) = b - x)%Z by lia.
-    destruct n; by subst.
+    iExists TT; iExists (P this); iExists th; iExists _.
+    work.
+    iFrame.
+    rewrite /CR. work.
+    destruct n; subst; simpl; work.
+    destruct args as [a[b?]]; simpl.
+    have->: (b + (0 - x) = b - x)%Z by lia. done.
   Admitted.
 
 End with_cpp.

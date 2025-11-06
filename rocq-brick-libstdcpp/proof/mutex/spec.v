@@ -110,7 +110,9 @@ Section with_cpp.
 
   (* recursive mutex -- ownership of the class. *)
   Parameter R : gname -> cQp.t -> Rep.
-  #[only(cfractional,timeless,type_ptr="std::recursive_mutex")] derive R.
+  #[only(cfractional,ascfractional,timeless,type_ptr="std::recursive_mutex")] derive R.
+  #[global] Instance R_learn : Cbn (Learn (learn_eq ==> any ==> learn_hints.fin) R).
+  Proof. solve_learnable. Qed.
 
   (* #[only(cfractional,timeless)] derive mutex_rep. *)
   (** <<token γ q>> if <<q = 1>>, then the mutex is not locked and therefore can be destroyed *)
@@ -179,7 +181,9 @@ Section with_cpp.
   Parameter rmutex_namespace : namespace.
   Context `{HasOwn mpredI (excl_authR natO)}.
   Definition inv_rmutex  (g : gname) (P : mpred) : mpred :=
-    inv rmutex_namespace (Exists n, own g (●E n) ** ([|n = 0|] ** P ** own g (◯E n) \\// [|n > 0|] ** Exists th, locked g th n)).
+    inv rmutex_namespace
+      (Exists n, own g (●E n) **
+        ([|n = 0|] ** P ** own g (◯E n) \\// [|n > 0|] ** Exists th, locked g th n)).
 
   (** [acquire_state] tracks the acquisition state of a recursive_mutex.
    *)
@@ -208,7 +212,7 @@ Section with_cpp.
     | NotHeld => locked g th 0
     | Held n args => own g (◯E (S n)) ** tele_app P args
     end.
-  
+
   #[global] Instance acquireable_learn γ th TT : LearnEq2 (@acquireable γ th TT).
   Proof. solve_learnable. Qed.
 
@@ -240,6 +244,15 @@ Section with_cpp.
     apply is_held in a as (? & ? & -> & ->).
     go. iExists _, _. go.
   Qed.
+
+  #[program]
+  Definition own_P_is_acquireable_C {TT : tele} g n P args :=
+    \cancelx
+    \consuming tele_app P args
+    \consuming own g (◯E (S n))
+    \proving{th} acquireable(TT:=TT) g th (Held n args) P
+    \end.
+  Next Obligation. rewrite /acquireable; work. Qed.
 
   Definition update {TT : tele} (f : TT -t> TT)
     (x : acquire_state TT)
@@ -287,7 +300,8 @@ Section with_cpp.
      \post acquireable g th (release $ Held n args) P).
 
 End with_cpp.
- 
+
 #[global] Hint Resolve acquireable_is_acquired_C : br_hints.
+#[global] Hint Resolve own_P_is_acquireable_C : br_hints.
 
 End recursive_mutex.
