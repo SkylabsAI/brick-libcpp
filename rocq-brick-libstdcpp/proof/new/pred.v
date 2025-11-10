@@ -1,3 +1,4 @@
+Require Import iris.proofmode.tactics.
 Require Import bluerock.auto.cpp.prelude.pred.
 
 Require Import bluerock.brick.libstdcpp.new.inc_new_cpp.
@@ -18,6 +19,7 @@ Section with_cpp.
       That memory is owned by the C++ abstract machine.
    *)
   Parameter allocatedR : forall {σ : genv}, Qp -> N -> Rep.
+  #[only(fractional,asfractional,fracvalid,timeless)] derive allocatedR.
   #[global] Instance: Cbn (Learn (any ==> learn_eq ==> learn_hints.fin) allocatedR).
   Proof. solve_learnable. Qed.
 
@@ -34,5 +36,29 @@ NES.Begin alloc.
       [| size_of _ ty = Some sz |] **
       new_token.R q {| new_token.alloc_ty := ty ; new_token.storage_ptr := storage_p ; new_token.overhead := overhead |} **
       pureR (storage_p .[ "unsigned char" ! -overhead ] |-> allocatedR q (overhead + sz)).
+  #[only(fractional,fracvalid,timeless)] derive new_token.R.
+  #[only(fracvalid,timeless)] derive tokenR.
+
+  #[local] Open Scope string_scope. (* for IPM *)
+  #[global] Instance tokenR_frac `{Σ : cpp_logic} {σ : genv} ty
+    : Fractional (tokenR ty).
+  Proof.
+    rewrite tokenR.unlock.
+    repeat first [ apply _
+                 | apply fractional_exist; intros ].
+    { apply observe_2_sep_l.
+      apply observe_2_only_provable_impl.
+      congruence. }
+    { apply observe_2_exist; intros.
+      apply observe_2_sep_r, observe_2_sep_l.
+      iIntros "A B".
+      iDestruct (observe_2 [| _ = _ |] with "A B") as "%".
+      inversion H; eauto. }
+    { do 2 (apply observe_2_exist; intros).
+      apply observe_2_sep_r, observe_2_sep_l.
+      iIntros "A B".
+      iDestruct (observe_2 [| _ = _ |] with "A B") as "%".
+      inversion H; eauto. }
+  Qed.
 
 NES.End alloc.
