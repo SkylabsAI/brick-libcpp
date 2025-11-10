@@ -1,6 +1,6 @@
 Require Import iris.proofmode.tactics.
 Require Import bluerock.auto.cpp.prelude.pred.
-
+Require Import bluerock.auto.cpp.elpi.derive.bi.
 Require Import bluerock.brick.libstdcpp.new.inc_new_cpp.
 #[local] Set Primitive Projections.
 
@@ -8,6 +8,24 @@ cpp.enum "std::align_val_t" from module alias.
 
 Section with_cpp.
   Context `{Σ : cpp_logic, source ⊧ σ}.
+
+  (** The ownership of the allocator data structures.
+
+   This would include ownership such as free lists and allocator data structures.
+   In C++, these are generally ambient, so this is exposed as a predicate
+   rather than a representation predicate.
+
+   NOTE/TODO: The current interface does **not** expose a global predicate for
+   the ownership of the allocator because doing so would effectively require
+   threading this ownership everywhere which is not very ergonomic; however,
+   formally, this makes the interface un-realizable.
+
+   More investigation is needed to understand how to encapsulate this ownership
+   (and other ownership like it). The most promising option to date is to use
+   thread-local invariants, but this still introduces some level of verbosity.
+   *)
+  Parameter allocatorP : forall {σ : genv}, Qp -> mpred.
+  #[only(fractional,fracvalid)] derive allocatorP.
 
   (** The allocation meta-data **owned by the allocator**.
 
