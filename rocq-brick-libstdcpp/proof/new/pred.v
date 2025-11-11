@@ -4,7 +4,7 @@ Require Import bluerock.auto.cpp.elpi.derive.bi.
 Require Import bluerock.brick.libstdcpp.new.inc_new_cpp.
 #[local] Set Primitive Projections.
 
-cpp.enum "std::align_val_t" from module alias.
+cpp.enum "std::align_val_t" from source alias.
 
 Section with_cpp.
   Context `{Σ : cpp_logic, source ⊧ σ}.
@@ -15,8 +15,8 @@ Section with_cpp.
    In C++, these are generally ambient, so this is exposed as a predicate
    rather than a representation predicate.
 
-   NOTE/TODO: The current interface does **not** expose a global predicate for
-   the ownership of the allocator because doing so would effectively require
+   NOTE/TODO: The current interface exposes but does **not** use `allocatorP`,
+   because doing so would effectively require
    threading this ownership everywhere which is not very ergonomic; however,
    formally, this makes the interface un-realizable.
 
@@ -54,11 +54,11 @@ NES.Begin alloc.
       [| size_of _ ty = Some sz |] **
       new_token.R q {| new_token.alloc_ty := ty ; new_token.storage_ptr := storage_p ; new_token.overhead := overhead |} **
       pureR (storage_p .[ "unsigned char" ! -overhead ] |-> allocatedR q (overhead + sz)).
-  #[only(fractional,fracvalid,timeless)] derive new_token.R.
+  #[only(fractional,asfractional,fracvalid,timeless)] derive new_token.R.
   #[only(fracvalid,timeless)] derive tokenR.
 
   #[local] Open Scope string_scope. (* for IPM *)
-  #[global] Instance tokenR_frac `{Σ : cpp_logic} {σ : genv} ty
+  #[global] Instance tokenR_xxx `{Σ : cpp_logic} {σ : genv} ty
     : Fractional (tokenR ty).
   Proof.
     rewrite tokenR.unlock.
@@ -78,5 +78,10 @@ NES.Begin alloc.
       iDestruct (observe_2 [| _ = _ |] with "A B") as "%".
       inversion H; eauto. }
   Qed.
+  (* We should be able to derive this, but <<derive>> gets stuck trying to prove the above instance
+  #[only(asfractional)] derive tokenR.
+   *)
 
+   #[global] Instance tokenR_asfractional `{Σ : cpp_logic} {σ : genv} (ty : type) (q : Qp) : AsFractional (tokenR ty q) (tokenR ty) q.
+  Proof. solve_as_frac. Qed.
 NES.End alloc.

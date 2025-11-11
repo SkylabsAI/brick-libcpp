@@ -9,7 +9,7 @@ Section with_cpp.
   (** ** Hints for proving [alloc.token] from [new_token.R].
 
      - <<_using_>> hints rely on [size_of _ ty = Some ...] to already be provable, while non
-       <<using>> hints introduce this fact.
+       <<using>> hints introduce this fact and have higher hint cost.
        This fact is otherwise lost because it is expressed within [alloc.token].
      - <<_0>> lemmas special case for non-array allocations which are common and ensure that
        the allocation overhead at the C++ level is 0. (Allocation overhead of the allocator-level is

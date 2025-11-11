@@ -15,7 +15,7 @@ Import cpp_notation.
 
     If you require the use of exceptions in your development,
     please up-vote this feature request:
-    <<https://github.com/bluerock-io/BRiCk/issues/15>>.
+    <<https://github.com/skylabsai/BRiCk/issues/15>>.
  *)
 
 

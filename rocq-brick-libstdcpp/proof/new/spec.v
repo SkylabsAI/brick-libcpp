@@ -1,4 +1,4 @@
-Require Import bluerock.auto.cpp.specs.
+Require Import bluerock.auto.cpp.prelude.spec.
 Require Export bluerock.brick.libstdcpp.new.pred.
 Require Import bluerock.brick.libstdcpp.new.inc_new_cpp.
 
