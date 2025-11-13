@@ -1,0 +1,15 @@
+; Copyright © 2022-2025 BlueRock Security, Inc.
+;
+; This file is CONFIDENTIAL AND PROPRIETARY to BlueRock. All rights reserved.
+;
+; Use of this file is only permitted subject to a separate written license agreement with BlueRock.
+
+(include_subdirs qualified)
+(coq.theory
+ (name bluerock.brick.libstdcpp.test) ; logical path of this library
+ (theories
+  Lens Lens.Elpi Equations Equations.Prop Equations.Type
+  Stdlib
+  bluerock iris stdpp elpi elpi_elpi ExtLib Ltac2
+  bluerock.brick.libstdcpp))
+(include dune.inc)

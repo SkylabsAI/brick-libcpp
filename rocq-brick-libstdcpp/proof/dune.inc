@@ -26,6 +26,15 @@
   	 (with-stderr-to test_cpp.v.stderr (run cpp2v -v %{input} -o test_cpp.v  -- -std=c++20 -stdlib=libstdc++ ))))
  (alias (name srcs) (deps test.cpp))
 )
+(subdir new
+ (rule
+  (targets inc_new_cpp.v.stderr inc_new_cpp.v)
+  (alias test_ast)
+  (deps (:input inc_new.cpp) (glob_files_rec ../*.hpp) (universe))
+  (action
+  	 (with-stderr-to inc_new_cpp.v.stderr (run cpp2v -v %{input} -o inc_new_cpp.v  -- -std=c++20 -stdlib=libstdc++ ))))
+ (alias (name srcs) (deps inc_new.cpp))
+)
 (subdir semaphore
  (rule
   (targets inc_hpp.v.stderr inc_hpp.v)
