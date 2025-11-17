@@ -1,0 +1,28 @@
+// For format details, see https://aka.ms/devcontainer.json.
+{
+  "name": "SkyLabs FM default",
+  "image":
+    // "ghcr.io/skylabsai/workspace:fm-release",
+    // "skylabsai/fm-releases:2025-11-16-llvm-19",
+    "skylabsai/fm-releases:fm-release-llvm-19",
+  "runArgs": [
+    "--platform",
+    "linux/amd64",
+    // We prefer --volume over "mounts" because it auto-creates the host folder.
+    "--volume",
+    "${localEnv:HOME}/.cache/remote_dune:/home/coq/.cache/dune:cached"
+  ],
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "vsrocq.path": "/home/coq/.opam/main/bin/vsrocqtop"
+      },
+      "extensions": [
+        "rocq-prover.vsrocq",
+        "ocamllabs.ocaml-platform",
+        "zeithaste.cursorcharcode@0.2.5",
+        "mr-konn.generic-input-method"
+      ]
+    }
+  }
+}
