@@ -1,0 +1,25 @@
+# AUTO-GENERATED CONTENT, EDIT `gen-_CoqProject-dune.sh` INSTEAD
+
+# Avoid warnings about entries in this _CoqProject
+-arg -w -arg -cannot-open-path
+# Warning settings from `dune` project files
+-arg -w -arg -notation-overridden
+-arg -w -arg -custom-entry-overridden
+-arg -w -arg -redundant-canonical-projection
+-arg -w -arg -ambiguous-paths
+-arg -w -arg -notation-incompatible-prefix
+# Turn warning on hints into error:
+-arg -w -arg +deprecated-hint-without-locality
+-arg -w -arg +deprecated-instance-without-locality
+-arg -w -arg +deprecated-tacopt-without-locality
+-arg -w -arg +future-coercion-class-field
+-arg -w -arg +unknown-option
+
+# Plugin directory.
+-I _build/install/default/lib
+
+# Specified logical paths for directories (for .v and .vo files).
+-Q _build/default/rocq-brick-libstdcpp/proof/ bluerock.brick.libstdcpp
+-Q rocq-brick-libstdcpp/proof/ bluerock.brick.libstdcpp
+-Q _build/default/rocq-brick-libstdcpp/test/ bluerock.brick.libstdcpp.test
+-Q rocq-brick-libstdcpp/test/ bluerock.brick.libstdcpp.test
