@@ -8,8 +8,25 @@
 (coq.theory
  (name bluerock.brick.libstdcpp.test) ; logical path of this library
  (theories
-  Lens Lens.Elpi Equations Equations.Prop Equations.Type
+  ; bluerock.brick.libstdcpp deps
   Stdlib
-  bluerock iris stdpp elpi elpi_elpi ExtLib Ltac2
+  stdpp
+  bluerock.upoly
+  elpi elpi_elpi elpi.apps.locker elpi.apps.NES
+  Lens Lens.Elpi
+  Ltac2 bluerock.ltac2.extra
+  bluerock.prelude
+  iris
+  bluerock.iris.extra
+  Equations Equations.Prop Equations.Type
+  bluerock.lang.cpp
+  bluerock.ltac2.logger
+  bluerock.auto.core
+  ;
+  ExtLib
+  bluerock.elpi.extra
+  bluerock.elpi.cpp
+  bluerock
+  ; bluerock.brick.libstdcpp deps end
   bluerock.brick.libstdcpp))
 (include dune.inc)

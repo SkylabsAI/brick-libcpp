@@ -9,7 +9,24 @@
  (name bluerock.brick.libstdcpp) ; logical path of this library
  (package rocq-brick-libstdcpp)
  (theories
-  Lens Lens.Elpi Equations Equations.Prop Equations.Type
+  ; bluerock deps
   Stdlib
-  bluerock iris stdpp elpi elpi_elpi ExtLib Ltac2))
+  stdpp
+  bluerock.upoly
+  elpi elpi_elpi elpi.apps.locker elpi.apps.NES
+  Lens Lens.Elpi
+  Ltac2 bluerock.ltac2.extra
+  bluerock.prelude
+  iris
+  bluerock.iris.extra
+  Equations Equations.Prop Equations.Type
+  bluerock.lang.cpp
+  bluerock.ltac2.logger
+  bluerock.auto.core
+  ;
+  ExtLib
+  bluerock.elpi.extra
+  bluerock.elpi.cpp
+  ; bluerock deps end
+  bluerock))
 (include dune.inc)
