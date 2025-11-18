@@ -115,9 +115,16 @@ Section with_cpp.
   Proof. solve_learnable. Qed.
 
   (* #[only(cfractional,timeless)] derive mutex_rep. *)
-  (** <<token γ q>> if <<q = 1>>, then the mutex is not locked and therefore can be destroyed *)
+  (** <<token γ q>> if <<q = 1>>, then the mutex is not locked and therefore can be destroyed.
+      <<token γ 1>> is shared among threads who has access to the lock, and a call to lock
+      turns some of <<token γ q>> into <<given_token γ q>>, unlock does the opposite.
+  *)
+
   Parameter token : gname -> cQp.t -> mpred.
   #[only(cfracsplittable,timeless)] derive token.
+  Parameter given_token : gname -> cQp.t -> mpred.
+  #[only(timeless)] derive given_token.
+  (* #[only(cfracsplittable,timeless)] derive given_token. *)
 
   (* the mask of recursive_mutex *)
   Definition mask := nroot .@ "std" .@ "recursive_mutex".
@@ -150,22 +157,22 @@ Section with_cpp.
      \post emp).
 
   cpp.spec "std::recursive_mutex::lock()" as lock_spec with
-      (\this this
-       \prepost{q g} this |-> R g q (* part of both pre and post *)
-       \persist{i} current_thread i
-       \pre token g q
-       \pre{Q} AC << ∀ n , locked g i n >> @ top \ ↑ mask , empty
-                    << locked g i (S n) , COMM Q >>
-       \post Q).
+    (\this this
+      \prepost{q g} this |-> R g q (* part of both pre and post *)
+      \persist{i} current_thread i
+      \pre{q'} token g q'
+      \pre{Q} AC << ∀ n , locked g i n >> @ top \ ↑ mask , empty
+                  << locked g i (S n) , COMM Q >>
+      \post Q ** given_token g q').
 
   cpp.spec "std::recursive_mutex::unlock()" as unlock_spec with
-      (\this this
-       \prepost{q g} this |-> R g q (* part of both pre and post *)
-       \persist{i} current_thread i
-       \pre token g q
-       \pre{Q} AC << ∀ n , locked g i (S n) >> @ top \ ↑ mask , empty
-                    << locked g i n , COMM Q >>
-       \post Q).
+    (\this this
+      \prepost{q g} this |-> R g q (* part of both pre and post *)
+      \persist{i} current_thread i
+      \pre{q'} given_token g q'
+      \pre{Q} AC << ∀ n , locked g i (S n) >> @ top \ ↑ mask , empty
+                  << locked g i n , COMM Q >>
+      \post token g q' ** Q).
 
 
   (* Alternative style:
@@ -272,9 +279,6 @@ Section with_cpp.
     by intros ([|] & ? & -> & ->)%is_held.
   Qed.
 
-  Opaque release.
-  Opaque acquireable.
-
   (* this is the usable pre-condition *)
   #[ignore_missing]
   cpp.spec "rmutex_client(std::recursive_mutex&)" with
@@ -289,7 +293,8 @@ Section with_cpp.
      \persist{g tt P} inv_rmutex g (∃ xs : tele_arg tt, tele_app P xs)
      \prepost{q} this |-> R g q
      \pre{th n} acquireable g th n P
-     \post Exists n', [| acquire n n' |] ** acquireable g th n' P).
+     \pre{q'} token g q'
+     \post given_token g q' ** Exists n', [| acquire n n' |] ** acquireable g th n' P).
   (* to prove: this is derivable from lock_spec *)
 
   cpp.spec "std::recursive_mutex::unlock()" as unlock_spec' with
@@ -297,7 +302,31 @@ Section with_cpp.
      \persist{g tt P} inv_rmutex g (∃ xs : tele_arg tt, tele_app P xs)
      \prepost{q} this |-> R g q
      \pre{th n args} acquireable g th (Held n args) P
-     \post acquireable g th (release $ Held n args) P).
+     \pre{q'} given_token g q'
+     \post token g q' ** acquireable g th (release $ Held n args) P).
+
+  Lemma lock_spec_impl_lock_spec' :
+    lock_spec |-- lock_spec'.
+  Proof.
+    apply specify_mono_fupd; work.
+    iExists q.
+    iModIntro; work.
+    iExists q'.
+    work.
+    iExists (∃ t : acquire_state tt, [| acquire n t |] ∗
+              acquireable g th t P)%I.
+    work.
+    wname [bi_wand] "W".
+    iSplitR "W".
+    - iAcIntro; rewrite /commit_acc/=.
+      wname [inv_rmutex] "I".
+      iInv "I" as (?) "?" "Hclose"; [admit|].
+      iApply fupd_mask_intro; [set_solver|].
+      work.
+  Admitted.
+
+  Opaque release.
+  Opaque acquireable.
 
 End with_cpp.
 
