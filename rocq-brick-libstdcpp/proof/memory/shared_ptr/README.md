@@ -33,16 +33,60 @@ Parameter R : gname -> cQp.t -> ptr -> Rep.
 
 (** A reference to the underlying object.
     References can be combined according to the sum monoid and the sum
-    of all of the <<n : N>> will be the current value of the reference count.
+    of all of the <<n : N>> will be the current value of the referece count.
+
+    The fractional nature of [ref] allows us to track all [ref], but it isn't
+    clear if this is necessary. Why not simply use an auth-frag with the sum?
  *)
-Parameter ref : gname -> N -> mpred.
+Parameter ref : gname -> Qp -> N -> mpred. (* fragmentary ownership *)
+Parameter total_users : gname -> N -> mpred. (* authoritative ownership *)
 
 (** The authority to hold [n] more references to the underlying object *)
 Parameter contender (g : gname) (n : N) : mpred.
 #[only(affine)] derive contender.
 
-(** Add specification here. *)
+(* initializing constructor *)
+cpp.spec "std::shared_ptr<T>::shared_ptr(T* )" with
+  (\this this
+   \arg{p} "p" (Vptr p)
+   \post Exists g,
+           this |-> shared_ptr.R g 1$m p **
+           shared_ptr.contender g MAX)
 
+(* copy ctor *)
+cpp.spec "std::shared_ptr<T>::shared_ptr(std::shared_ptr<T>&)"
+  (\this this
+   \arg{other} "other" (Vref other)
+   \pre{g PR qr qr' q p} other |-> shared_ptr.R g PR (qr + qr') q p
+   \pre shared_ptr.contender g 1
+   \post other |-> shared_ptr.R g PR qr q p **
+         this |-> shared_ptr.R g PR qr' 1$m p).
+
+(* destructor *)
+cpp.spec "std::shared_ptr<T>::~shared_ptr()" with
+  (\this this
+   \pre{g PR qr} this |-> shared_ptr.R g PR qr 1$m p
+   \pre PR qr
+   \post shared_ptr.contender g 1).
+
+(* <<use_count>>
+   NOTE: this specification **might** work under two conditions:
+   1. <<std::weak_ptr>>s do not exist.
+   2. the access on the counter was not weak.
+   More thinking is necessary to understand if these can be relaxed, the second
+   seems to make this very subtle.
+*)
+cpp.spec "std::shared_ptr<T>::use_count() const" with
+  (\this this
+   \let{cnst} q := cQp.mk 1 cnst
+   \pre{g PR qr cnst} this |-> shared_ptr.R g PR qr q p
+   \post{count}[Vint count]
+      if bool_decide (count = 0) then
+        [| p = nullptr |] ** this |-> shared_ptr.R g PR qr q nullptr
+      else if bool_decide (count = 1) then
+        default (1 - qr)%Qp emp PR **
+        this |-> shared_ptr.R g PR 1 q q p
+      else this |-> shared_ptr.R g PR qr q p).
 ```
 
 ## Client-Retained Ownership
@@ -73,7 +117,7 @@ Parameter contender (g : gname) (n : N) : mpred.
 
 (** permits weakening of <<PR>>, this is subtle and might not be necessary *)
 Axiom R_weaken : forall g PR PR' qr q p (_ : Fractional PR'),
- (Forall q, PR q -* PR' q) |-- R g PR qr q p -* R g PR' qr q p.
+ (Forall q, PR' q -* PR q) |-- R g PR qr q p -* R g PR' qr q p.
 
 (* initializing constructor *)
 cpp.spec "std::shared_ptr<T>::shared_ptr(T* )" with
@@ -121,3 +165,17 @@ cpp.spec "std::shared_ptr<T>::use_count() const" with
       else this |-> shared_ptr.R g PR qr q p).
 ```
 
+## Asymmetric Ownership
+
+In this specification, the full ownership of the object is transferred the
+`shared_ptr` library and it is taken out each time that a new `shared_ptr` is
+created. In practice, the assymetric nature is probably only useful for the
+array form when different clients will get access to different elements.
+
+This specification is based on: ...
+
+```coq
+
+
+
+```
