@@ -189,8 +189,6 @@ NES.Begin unique_lock.
         iSplit; iApply specify_mono. work with br_erefl; repeat case_match;
           try (exfalso; congruence);
           ework with br_erefl.
-        wname [bi_wand] "W".
-        iApply ("W" with "[$] [$]").
       Qed. *)
 
       cpp.spec "std::unique_lock<$ty>::operator=(std::unique_lock<$ty> &&)" as move_assign_spec_alt from source templates templates (
@@ -237,8 +235,6 @@ NES.Begin unique_lock.
         iSplit; iApply specify_mono; work with br_erefl; repeat case_match;
           try (exfalso; congruence);
           ework with br_erefl.
-        wname [bi_wand] "W".
-        iApply ("W" with "[$] [$]").
       Qed. *)
 
       Abbreviation owns_lock_spec_body := (
