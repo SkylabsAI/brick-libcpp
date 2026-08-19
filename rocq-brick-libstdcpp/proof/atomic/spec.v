@@ -19,11 +19,11 @@ Module atomic_specs (Import atomic : ATOMIC_PREDS).
     Context `{Σ : cpp_logic} {σ : genv}.
     Context (ty : type).
     Context `{!PrimVal ty A,!DefaultValue ty A}.
-    Notation s := (class_name ty) (only parsing).	(** [Atomic<T>] *)
-    Notation b0 := (base_name ty) (only parsing).
-    Notation b1 := (base_name1 ty) (only parsing).
-    Notation R := (R ty).
-    Notation bR q v := (_derived b0 b1 ,, _derived b1 s |-> R q%cQp v) (only parsing).
+    Abbreviation s := (class_name ty) (only parsing).	(** [Atomic<T>] *)
+    Abbreviation b0 := (base_name ty) (only parsing).
+    Abbreviation b1 := (base_name1 ty) (only parsing).
+    Abbreviation R := (R ty).
+    Abbreviation bR q v := (_derived b0 b1 ,, _derived b1 s |-> R q%cQp v) (only parsing).
 
     Definition default_ctor : mpred :=
       specify.template.ctor s [] $
@@ -258,9 +258,9 @@ Module atomic_specs (Import atomic : ATOMIC_PREDS).
     Context (ty : type).
     Context `{PrimVal ty A}.
 
-    #[local] Notation s := (class_name ty) (only parsing).	(** [Atomic<T>] *)
-    #[local] Notation b1 := (base_name1 ty) (only parsing).
-    #[local] Notation bR q v := (_derived b1 s |-> R ty q v) (only parsing).
+    #[local] Abbreviation s := (class_name ty) (only parsing).	(** [Atomic<T>] *)
+    #[local] Abbreviation b1 := (base_name1 ty) (only parsing).
+    #[local] Abbreviation bR q v := (_derived b1 s |-> R ty q v) (only parsing).
 
     (** Apply operation [op] to the atomic cell pointed by [this],
     and return the old contents to continuation [K]. *)

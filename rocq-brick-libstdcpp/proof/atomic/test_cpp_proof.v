@@ -12,7 +12,7 @@ Require Import skylabs.cpp.stdlib.test.atomic.test_cpp.
 Section with_cpp.
   Context `{Σ : cpp_logic, σ : genv}.
 
-  Notation GLOBALS q := (_global "std::__1::memory_order_seq_cst" |-> primR "enum std::__1::memory_order" q 5).
+  Abbreviation GLOBALS q := (_global "std::__1::memory_order_seq_cst" |-> primR "enum std::__1::memory_order" q 5).
 
   Section specs.
     Context `{MOD : test_cpp.source ⊧ σ}.
@@ -67,9 +67,9 @@ Section with_cpp.
 
   #[local] Hint Resolve fractional.UNSAFE_read_prim_cancel : sl_opacity.
 
-  Notation BASE p := (p ,, _base "std::__1::atomic<int>" "std::__1::__atomic_base<int, 1b>" ,, _base "std::__1::__atomic_base<int, 1b>" "std::__1::__atomic_base<int, 0b>").
+  Abbreviation BASE p := (p ,, _base "std::__1::atomic<int>" "std::__1::__atomic_base<int, 1b>" ,, _base "std::__1::__atomic_base<int, 1b>" "std::__1::__atomic_base<int, 0b>").
 
-  Notation BASE1 p := (p ,, _base "std::__1::atomic<int>" "std::__1::__atomic_base<int, 1b>").
+  Abbreviation BASE1 p := (p ,, _base "std::__1::atomic<int>" "std::__1::__atomic_base<int, 1b>").
 
   #[program]
   Definition do_load_C (p : ptr) :=
@@ -185,7 +185,7 @@ Section with_cpp.
   Hint Resolve do_load_C do_store_C : sl_opacity.
   Hint Resolve do_op_C : sl_opacity.
 
-  Notation OK spec :=
+  Abbreviation OK spec :=
     (verify?[test_cpp.source] spec) (only parsing).
 
   Set Typeclasses Debug.

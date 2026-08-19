@@ -18,20 +18,20 @@ memory order macros to __ATOMIC_SEQ_CST.
 *)
 
 cpp.enum "std::memory_order" from (inc_int_cpp.source) variant.
-#[global] Notation Tmemory_order := {%cpp_type[inc_int_cpp.source] "std::memory_order"} (only parsing).
+#[global] Abbreviation Tmemory_order := {%cpp_type[inc_int_cpp.source] "std::memory_order"} (only parsing).
 
 Module Type ATOMIC_PREDS.
 
   (** Type [t] indexing our spec models the type name T in Atomic<T>. *)
 
   (** The type where the actual methods are implemented *)
-  #[global] Notation base_name ty :=
+  #[global] Abbreviation base_name ty :=
     (Ninst "std::__1::__atomic_base" [Atype ty; Avalue (Eint 0 Tbool)]).
-  #[global] Notation base_name1 ty :=
+  #[global] Abbreviation base_name1 ty :=
     (Ninst "std::__1::__atomic_base" [Atype ty; Avalue (Eint 1 Tbool)]).
   (** The type <<std::atomic<T>>> *)
-  #[global] Notation class_name ty := (Ninst "std::__1::atomic" [Atype ty]).
-  #[global] Notation T ty := (Tnamed (class_name ty)).
+  #[global] Abbreviation class_name ty := (Ninst "std::__1::atomic" [Atype ty]).
+  #[global] Abbreviation T ty := (Tnamed (class_name ty)).
 
   (** Abstract predicates *)
 
@@ -40,7 +40,7 @@ Module Type ATOMIC_PREDS.
 
   Section R_props.
     Context `{Σ : cpp_logic} {σ : genv} `{PV : @PrimVal ty A}.
-    Notation R := (R ty (PV:=PV)).
+    Abbreviation R := (R ty (PV:=PV)).
 
     #[global] Declare Instance R_frac : CFractional1 R.
     #[global] Declare Instance R_timeless : Timeless2 R.
