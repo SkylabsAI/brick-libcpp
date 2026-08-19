@@ -6,10 +6,10 @@
  *)
 Require Import skylabs.auto.cpp.spec.
 Require Import skylabs.cpp.spec.concepts.
-Require Import skylabs.cpp.stdlib.atomic.inc_int_cpp.
+Require Import skylabs.brick.libstdcpp.atomic.inc_int_cpp.
 
 Require Import skylabs.cpp.spec.concepts.
-Require Export skylabs.cpp.stdlib.atomic.pred.
+Require Export skylabs.brick.libstdcpp.atomic.pred.
 
 Module atomic_specs (Import atomic : ATOMIC_PREDS).
 

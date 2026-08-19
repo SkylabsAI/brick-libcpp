@@ -5,9 +5,9 @@
  * SPDX-License-Identifier: LGPL-2.1 WITH BlueRock Exception for use over network, see repository root for details.
  *)
 Require Import skylabs.auto.cpp.proof.
-Require Import skylabs.cpp.stdlib.cassert.spec.
-Require Import skylabs.cpp.stdlib.atomic.spec.
-Require Import skylabs.cpp.stdlib.test.atomic.test_cpp.
+Require Import skylabs.brick.libstdcpp.cassert.spec.
+Require Import skylabs.brick.libstdcpp.atomic.spec.
+Require Import skylabs.brick.libstdcpp.test.atomic.test_cpp.
 
 Section with_cpp.
   Context `{Σ : cpp_logic, σ : genv}.

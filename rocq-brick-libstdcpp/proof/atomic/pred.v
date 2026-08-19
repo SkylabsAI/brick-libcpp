@@ -6,7 +6,7 @@
  *)
 Require Import skylabs.auto.cpp.spec.
 Require Import skylabs.cpp.spec.concepts.
-Require skylabs.cpp.stdlib.atomic.inc_int_cpp.
+Require skylabs.brick.libstdcpp.atomic.inc_int_cpp.
 
 Require Import skylabs.cpp.spec.concepts.
 
