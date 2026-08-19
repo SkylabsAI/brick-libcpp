@@ -26,9 +26,7 @@ Module Type ATOMIC_PREDS.
 
   (** The type where the actual methods are implemented *)
   #[global] Abbreviation base_name ty :=
-    (Ninst "std::__atomic_base" [Atype ty; Avalue (Eint 0 Tbool)]).
-  #[global] Abbreviation base_name1 ty :=
-    (Ninst "std::__atomic_base" [Atype ty; Avalue (Eint 1 Tbool)]).
+    (Ninst "std::__atomic_base" [Atype ty]).
   (** The type <<std::atomic<T>>> *)
   #[global] Abbreviation class_name ty := (Ninst "std::atomic" [Atype ty]).
   #[global] Abbreviation T ty := (Tnamed (class_name ty)).
