@@ -12,7 +12,7 @@ Require Import skylabs.brick.libstdcpp.test.atomic.test_cpp.
 Section with_cpp.
   Context `{Σ : cpp_logic, σ : genv}.
 
-  Abbreviation GLOBALS q := (_global "std::__1::memory_order_seq_cst" |-> primR "enum std::__1::memory_order" q 5).
+  Abbreviation GLOBALS q := (_global "std::memory_order_seq_cst" |-> primR "enum std::memory_order" q 5).
 
   Section specs.
     Context `{MOD : test_cpp.source ⊧ σ}.
@@ -67,9 +67,9 @@ Section with_cpp.
 
   #[local] Hint Resolve fractional.UNSAFE_read_prim_cancel : sl_opacity.
 
-  Abbreviation BASE p := (p ,, _base "std::__1::atomic<int>" "std::__1::__atomic_base<int, 1b>" ,, _base "std::__1::__atomic_base<int, 1b>" "std::__1::__atomic_base<int, 0b>").
+  Abbreviation BASE p := (p ,, _base "std::atomic<int>" "std::__atomic_base<int, 1b>" ,, _base "std::__atomic_base<int, 1b>" "std::__atomic_base<int, 0b>").
 
-  Abbreviation BASE1 p := (p ,, _base "std::__1::atomic<int>" "std::__1::__atomic_base<int, 1b>").
+  Abbreviation BASE1 p := (p ,, _base "std::atomic<int>" "std::__atomic_base<int, 1b>").
 
   #[program]
   Definition do_load_C (p : ptr) :=
