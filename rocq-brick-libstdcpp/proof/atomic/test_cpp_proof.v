@@ -7,7 +7,8 @@
 Require Import skylabs.auto.cpp.proof.
 Require Import skylabs.brick.libstdcpp.cassert.spec.
 Require Import skylabs.brick.libstdcpp.atomic.spec.
-Require Import skylabs.brick.libstdcpp.test.atomic.test_cpp.
+(* Require Import skylabs.brick.libstdcpp.test.atomic.test_cpp. *)
+Require Import skylabs.brick.libstdcpp.atomic.test_cpp.
 
 Section with_cpp.
   Context `{Σ : cpp_logic, σ : genv}.
