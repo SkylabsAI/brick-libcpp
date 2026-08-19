@@ -248,10 +248,13 @@ Module atomic_specs (Import atomic : ATOMIC_PREDS).
   Class UnOp (ty : type) (A : Type) (op_name : OverloadableOperator) :=
   { atomic_un_op : A -> A
   }.
+  #[global] Hint Mode UnOp ! - ! : typeclass_instances.
 
   Class BinOp (ty1 ty2 : type) (A B : Type) (op_name : OverloadableOperator) (fun_name : ident) :=
   { atomic_bin_op : A -> B -> A
   }.
+  #[global] Hint Mode BinOp ! - ! - ! - : typeclass_instances.
+  #[global] Hint Mode BinOp ! - ! - - ! : typeclass_instances.
 
   Section with_ty.
     Context `{Σ : cpp_logic} {σ : genv}.
@@ -270,14 +273,14 @@ Module atomic_specs (Import atomic : ATOMIC_PREDS).
     #[global] Hint Opaque do_op : typeclass_instances sl_opacity.
 
     Section with_unop.
-      Context `{!UnOp ty A op_name}.
+      Context `{UO : !UnOp ty A op_name}.
 
       (** Triple for unary operators that return the new value *)
       Definition unop_fetch : mpred :=
         specify.template.op b1 op_name function_qualifiers.N ty [] $
           \this this
-          \pre{K} do_op atomic_un_op this K
-          \post{m}[Vinj ty (atomic_un_op m)] K m.
+          \pre{K} do_op (atomic_un_op (UnOp := UO)) this K
+          \post{m}[Vinj ty (atomic_un_op (UnOp := UO) m)] K m.
 
       #[global] Hint Opaque unop_fetch : sl_opacity.
       #[global] Arguments unop_fetch : simpl never.
@@ -289,7 +292,7 @@ Module atomic_specs (Import atomic : ATOMIC_PREDS).
         specify.template.op b1 op_name function_qualifiers.N ty [Tint] $
           \this this
           \arg{dummy} "dummy" (Vint dummy)
-          \pre{K} do_op atomic_un_op this K
+          \pre{K} do_op (atomic_un_op (UnOp := UO)) this K
           \post{m}[Vinj ty m] K m.
 
       #[global] Hint Opaque fetch_unop : sl_opacity.
@@ -299,7 +302,7 @@ Module atomic_specs (Import atomic : ATOMIC_PREDS).
     End with_unop.
 
     Section with_binop.
-      Context `{!BinOp ty tyM A B op_name fun_name}.
+      Context `{BO : !BinOp ty tyM A B op_name fun_name}.
       Context `{!PrimVal tyM B}.
 
       (** Triple for binary operators that return the new value *)
@@ -307,8 +310,8 @@ Module atomic_specs (Import atomic : ATOMIC_PREDS).
         specify.template.op b1 op_name function_qualifiers.N ty [tyM] $
           \this this
           \arg{n : B} "v" (Vinj tyM n)
-          \pre{K} do_op (flip atomic_bin_op n) this K
-          \post{m}[Vinj ty (atomic_bin_op m n)] K m.
+          \pre{K} do_op (flip (atomic_bin_op (BinOp := BO)) n) this K
+          \post{m}[Vinj ty (atomic_bin_op (BinOp := BO) m n)] K m.
       #[global] Hint Opaque binop_fetch : sl_opacity.
       #[global] Arguments binop_fetch : simpl never.
       Definition SpecFor_binop_fetch := RegisterSpec binop_fetch.
@@ -320,7 +323,7 @@ Module atomic_specs (Import atomic : ATOMIC_PREDS).
           \this this
           \arg{n : B} "v" (Vinj tyM n)
           \arg "mo" (memory_order.to_val memory_order.seq_cst)
-          \pre{K} do_op (flip atomic_bin_op n) this K
+          \pre{K} do_op (flip (atomic_bin_op (BinOp := BO)) n) this K
           \post{m}[Vinj ty m] K m.
       #[global] Hint Opaque fetch_binop : sl_opacity.
       #[global] Arguments fetch_binop : simpl never.
