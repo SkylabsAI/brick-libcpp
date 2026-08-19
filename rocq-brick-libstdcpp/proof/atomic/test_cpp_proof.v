@@ -68,10 +68,9 @@ Section with_cpp.
 
   #[local] Hint Resolve fractional.UNSAFE_read_prim_cancel : sl_opacity.
 
-  Abbreviation BASE p := (p ,, _base "std::atomic<int>" "std::__atomic_base<int, 1b>" ,, _base "std::__atomic_base<int, 1b>" "std::__atomic_base<int, 0b>").
+  Abbreviation BASE p := (p ,, _base "std::atomic<int>" "std::__atomic_base<int>").
 
-  Abbreviation BASE1 p := (p ,, _base "std::atomic<int>" "std::__atomic_base<int, 1b>").
-
+  Ltac normalize_ptrs := idtac.
   #[program]
   Definition do_load_C (p : ptr) :=
     \cancelx
@@ -168,7 +167,7 @@ Section with_cpp.
     \using denoteModule test_cpp.source
     \consuming{n} p |-> atomic.R "int" 1$m n
     \proving{K (_ : IsExistential K)}
-      spec.do_op "int" op (BASE1 p) K
+      spec.do_op "int" op (BASE p) K
     \instantiate K := (fun res => [| res = n |] **
                                p |-> atomic.R "int" 1$m (op n))
     \end@{mpredI}.
