@@ -362,4 +362,6 @@ Module atomic_specs (Import atomic : ATOMIC_PREDS).
 
 End atomic_specs.
 
+NES.Begin std.atomic.
 Include (atomic_specs atomic).
+NES.End std.atomic.
