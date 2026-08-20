@@ -6,6 +6,7 @@
  */
 #include <atomic>
 #include <cassert>
+#include <thread>
 
 using namespace std;
 
@@ -13,6 +14,20 @@ void
 test(bool b, const char* msg = nullptr) {
     assert(b);
 }
+
+void testThreadId(std::thread::id i) {
+  std::atomic<std::thread::id> owner{};
+  std::atomic<std::thread::id> owner2{i};
+  std::thread::id i2 = owner;
+  owner = i;
+}
+
+// void testThreadId(std::thread::id id) {
+//   std::atomic<std::thread::id> owner{};
+//   std::atomic<std::thread::id> owner2{id};
+//   owner;
+//   owner = id;
+// }
 
 void
 TestDefaultConstructor() {

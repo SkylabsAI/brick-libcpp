@@ -55,6 +55,11 @@ Section with_cpp.
         (\prepost{q} GLOBALS q
          \post[Vint 0] emp).
 
+    cpp.spec "testThreadId(std::thread::id)" as testThreadId with (
+      \arg{p} "" (Vptr p)
+      \prepost{q} GLOBALS q
+      \post emp).
+
     Definition specs :=
       test_default_ctor **
       test_parameterized_ctor **
