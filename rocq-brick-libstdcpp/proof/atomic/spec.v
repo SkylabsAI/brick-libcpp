@@ -337,6 +337,10 @@ Module atomic_specs (Import atomic : ATOMIC_PREDS).
     if sgn is Signed then to_signed (int_rank.bitsize sz) (a + b)
     else to_unsigned (int_rank.bitsize sz) (a + b).
 
+  #[global] Instance num_plusplus {sz sgn} :
+    UnOp (Tnum sz sgn) Z OOPlusPlus :=
+  {| atomic_un_op := add_raw sz sgn 1 |}.
+
   #[global] Instance num_add {sz sgn} :
     BinOp (Tnum sz sgn) (Tnum sz sgn) Z Z OOPlusEqual "fetch_add" :=
   {| atomic_bin_op := add_raw sz sgn |}.
