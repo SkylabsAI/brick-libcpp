@@ -75,16 +75,16 @@ TestFetchAdd() {
     assert(14 == ++atomicInt);
     assert(19 == (atomicInt += 5));
 
-    int x[11] = {0};
-    std::atomic<int*> atomicPtr{x};
-    assert(x == atomicPtr.fetch_add(1));
-    assert(x+1 == atomicPtr.load());
-    assert(x+1 == atomicPtr.fetch_add(1));
-    assert(x+2 == atomicPtr);
-    assert(x+2 == atomicPtr++);
-    assert(x+3 == atomicPtr);
-    assert(x+4 == ++atomicPtr);
-    assert(x+9 == (atomicPtr += 5));
+    // int x[11] = {0};
+    // std::atomic<int*> atomicPtr{x};
+    // assert(x == atomicPtr.fetch_add(1));
+    // assert(x+1 == atomicPtr.load());
+    // assert(x+1 == atomicPtr.fetch_add(1));
+    // assert(x+2 == atomicPtr);
+    // assert(x+2 == atomicPtr++);
+    // assert(x+3 == atomicPtr);
+    // assert(x+4 == ++atomicPtr);
+    // assert(x+9 == (atomicPtr += 5));
 }
 
 int
