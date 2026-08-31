@@ -6,11 +6,13 @@ Require Import skylabs.brick.libstdcpp.mutex.spec.prelude.
 Require Import skylabs.brick.libstdcpp.mutex.spec.unique_lock.
 Require Import skylabs.brick.libstdcpp.mutex.spec.mutex.
 Require Import skylabs.brick.libstdcpp.lib.tactics.
+Require Import skylabs.brick.libstdcpp.lib.lock_ghost.
 
 NES.Begin unique_lock.
   Section with_cpp.
     Context `{Σ : cpp_logic} {σ : genv}.
     Context `{HAS_THREADS : !HasStdThreads Σ}.
+    Context `{!lock_ghost.lockG Σ}.
 
     Import R_unfold.
 
@@ -43,10 +45,9 @@ NES.Begin unique_lock.
         "std::unique_lock<std::mutex>::unique_lock(std::mutex&)".
     Proof.
       verify_spec; go.
-      iExists K.
+      iExists K, q.
       (* Time Succeed solve [setoid_rewrite cQp.scale_mut; setoid_rewrite (right_id_L 1%Qp Qp.mul); ego with br_erefl]. *)
 
-      iExists _, q.
       rewrite cQp.scale_mut (right_id_L 1%Qp Qp.mul).
       go with br_erefl.
     Qed.

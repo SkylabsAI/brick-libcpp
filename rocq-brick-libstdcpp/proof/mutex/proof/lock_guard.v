@@ -3,21 +3,20 @@ Require Import skylabs.brick.libstdcpp.mutex.spec.mutex.
 Require Import skylabs.brick.libstdcpp.mutex.spec.lock_guard.
 
 Require Import skylabs.brick.libstdcpp.mutex.inc_hpp.
+Require Import skylabs.brick.libstdcpp.lib.lock_ghost.
 
 Import linearity.
 
 Section with_cpp.
   Context `{Σ : cpp_logic, σ : genv}.
   Context {HAS_THREADS : HasStdThreads Σ}.
+  Context `{!lock_ghost.lockG Σ}.
 
   Import lock_guard.
 
   (* TODO: not ideal *)
   #[global] Instance UNSAFE_R_learnable : forall {HAS_THREADS : HasStdThreads Σ} {σ : genv},
       Cbn (Learn (learn_eq ==> learn_eq ==> learn_eq ==> fin_at) mutex.R).
-  Proof. solve_learnable. Qed.
-
-  #[global] Instance UNSAFE_token_learn : Cbn (Learn (req_eq ==> learn_eq ==> learn_hints.fin) mutex.token).
   Proof. solve_learnable. Qed.
 
   #[local] Hint Resolve fractional.UNSAFE_read_prim_learn : sl_opacity.
