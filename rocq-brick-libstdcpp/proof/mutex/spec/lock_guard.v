@@ -3,6 +3,7 @@ Require Import skylabs.brick.libstdcpp.mutex.spec.mutex.
 Require Export skylabs.brick.libstdcpp.runtime.pred.
 
 Require Import skylabs.brick.libstdcpp.mutex.inc_hpp.
+Require Import skylabs.brick.libstdcpp.lib.lock_ghost.
 
 
 Import linearity.
@@ -47,6 +48,7 @@ Module lock_guard.
 Section with_cpp.
   Context `{Σ : cpp_logic, σ : genv}.
   Context {HAS_THREADS : HasStdThreads Σ}.
+  Context `{!lock_ghost.lockG Σ}.
 
   #[global] Instance R_learn :
     Cbn (Learn (learn_eq ==> any ==> learn_eq ==> learn_hints.fin) lock_guard.R) :=
@@ -87,20 +89,20 @@ Section with_cpp.
     \arg{mp} "m" (Vptr mp)
     \persist{thr} current_thread thr
     \pre{g q P} mp |-> mutex.R g q$m P
-    \pre mutex.token g q
+    \pre lock_ghost.user g thr
     \post
       this |-> R (mp, g, q) 1$m P **
-      P ** mutex.locked g thr q
+      P ** mutex.locked g thr
     ).
 
   cpp.spec "std::lock_guard<std::mutex>::~lock_guard()" as dtor_spec from source with (
     \this this
     \pre{mp g q P} this |-> R (mp, g, q) 1$m P
     \persist{thr} current_thread thr
-    \pre mutex.locked g thr q
+    \pre mutex.locked g thr
     \pre ▷P
     \post
-      mutex.token g q **
+      lock_ghost.user g thr **
       mp |-> mutex.R g q$m P
   ).
 
@@ -124,4 +126,3 @@ Section with_cpp.
 
 End with_cpp.
 End lock_guard.
-
