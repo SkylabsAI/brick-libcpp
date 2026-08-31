@@ -9,42 +9,33 @@ Require Export skylabs.cpp.slice.
 Require Import skylabs.cpp.spec.concepts.
 
 Require Import skylabs.brick.libstdcpp.initializer_list.inc_initializer_list_cpp.
+Require Import skylabs.brick.libstdcpp.initializer_list.inc_initializer_list_cpp_templates.
 
 NES.Begin std.
   #[local] Open Scope Z_scope.
 
   NES.Begin initializer_list.
-    #[global] Abbreviation N ty := (Ninst "std::initializer_list" [Atype ty]) (only parsing).
-    #[global] Abbreviation T ty := (Tnamed (N ty)) (only parsing).
-
     (**
         Module [std.initializer_list] provides specifications for
         <<std::initializer_list<ty> >>.
 
         # The spine
 
-        Unlike the other containers here, the "spine" predicate is *not* defined
-        in this file: it is [initializer_listR], provided by BRiCk itself (see
-        <<lang/cpp/logic/expr.v>>). That is because the *language*, not the
-        library, creates these objects -- <https://eel.is/c++draft/dcl.init.list#5>
-        -- so the rule that builds one ([wp_init_initlist_std]) has to be able to
-        talk about the result.
+        A <<std::initializer_list>> refers to a backing array
+        (<https://eel.is/c++draft/dcl.init.list#5>) that the *language*, not the
+        library, creates: [Einitlist_std] in BRiCk builds one by calling the
+        constructor specified below.
 
-        [initializer_listR ty q arrayp n] owns a <<std::initializer_list<ty> >>
-        referring to a backing array of [n] elements at [arrayp]. It is abstract:
-        <https://eel.is/c++draft/initializer.list.syn> specifies only <<begin()>>,
-        <<end()>> and <<size()>> and declares no data members, and since
-        <<end() - begin() == size()>>, every conforming representation is
-        isomorphic to the pair ([arrayp], [n]). So nothing is lost by declining to
-        name fields, and neither BRiCk nor these specifications commit to a
-        particular standard library.
+        [spineR] owns the object itself. Its model [M] is the pair the three
+        accessors pin down -- <<begin()>>, <<end()>> and <<size()>>, with
+        <<end() - begin() == size()>>.
 
         # The payload
 
         Like [std.vector], the spine owns only the shape. The elements live at
         [arrayp] and are owned separately, via [array_sliceR]:
         <<
-          p |-> std.initializer_list.spineR ty q arrayp (lengthN xs) **
+          p |-> std.initializer_list.spineR ty q (Mk arrayp (lengthN xs)) **
           arrayp |-> array_sliceR ty 0 (lengthZ xs) Rpayload xs
         >>
         [R_at] and [R] below bundle the two for convenience. Keeping them
@@ -55,7 +46,8 @@ NES.Begin std.
         unconditionally would suggest the object owns storage it does not control.
 
         LIMITATION: these specifications are *axiomatized*, not proved against
-          libstdc++'s implementation.
+          libstdc++'s implementation, even though [spineR] is stated in terms of
+          its fields.
 
         LIMITATION: BRiCk does not support the lifetime-extended form
           <<std::initializer_list<int> il = {1,2,3};>>, which needs scope-extruded
@@ -64,12 +56,26 @@ NES.Begin std.
           constructor taking an <<initializer_list>> -- are supported.
      *)
 
+    (** The backing array and its length: the information content
+        <<begin()>>/<<end()>>/<<size()>> pin down.
+
+        NOTE declared before the [N] abbreviation below, which would otherwise
+        shadow the [N] of [len]. *)
+    Record M : Type := Mk { arrayp : ptr ; len : N }.
+
+    #[global] Abbreviation N ty := (Ninst "std::initializer_list" [Atype ty]) (only parsing).
+    #[global] Abbreviation T ty := (Tnamed (N ty)) (only parsing).
+
     (** Ownership of the <<std::initializer_list>> object alone.
 
-        NOTE this is [initializer_listR] from BRiCk; the alias exists so that
-        client code reads uniformly with [std.vector.spineR] and friends. *)
-    #[global] Abbreviation spineR ty q arrayp n := (initializer_listR ty q arrayp n)
-      (only parsing).
+        NOTE the field names are libstdc++'s; this package specifies that
+        implementation. Nothing outside this definition depends on them. *)
+    sl.lock
+    Definition spineR `{Σ : cpp_logic, σ : genv} (ty : type) (q : cQp.t) (m : M) : Rep :=
+      structR (N ty) q **
+      _field (N ty .:: Nid "_M_array") |-> ptrR<Tconst ty> q m.(arrayp) **
+      _field (N ty .:: Nid "_M_len") |-> primR Tsize_t q (Vn m.(len)).
+    #[only(cfracsplittable,type_ptr,lazy_unfold(global))] derive spineR.
 
     (** Spine and payload together, for a known backing array.
 
@@ -77,36 +83,48 @@ NES.Begin std.
         genuinely different resources: the <<initializer_list>> object may well
         be mutable (a freshly materialized temporary is), while the backing
         array is an array of <<const E>>
-        (<https://eel.is/c++draft/dcl.init.list#5>) and so is owned constly. A
-        single fraction, as [std.vector.R_alloc_cap] uses, cannot describe that. *)
-    #[global] Abbreviation R_at ty q qx arrayp xs :=
-      ( spineR ty q arrayp (lengthN xs) **
-        pureR (arrayp |-> array_sliceR ty 0 (lengthZ xs) (objR ty qx) xs) )%I
+        (<https://eel.is/c++draft/dcl.init.list#5>) and so is owned constly. *)
+    #[global] Abbreviation R_at ty q qx p xs :=
+      ( spineR ty q (Mk p (lengthN xs)) **
+        pureR (p |-> array_sliceR ty 0 (lengthZ xs) (objR ty qx) xs) )%I
       (q in scope cQp_scope, qx in scope cQp_scope).
 
     (** Spine and payload together, hiding the backing array. *)
-    #[global] Abbreviation R ty q qx xs := (∃ arrayp, R_at ty q qx arrayp xs)%I
+    #[global] Abbreviation R ty q qx xs := (∃ p, R_at ty q qx p xs)%I
       (q in scope cQp_scope, qx in scope cQp_scope).
 
     Section with_cpp.
       Context `{Σ : cpp_logic, σ : genv}.
       Context (ty : type).
 
-      #[local] Abbreviation initializer_list := (N ty) (only parsing).
-      #[local] Abbreviation spineR q arrayp n := (initializer_listR ty q arrayp n).
+      #[local] Abbreviation spineR := (spineR ty).
+
+      #[global] Instance: LearnEqF1 spineR := ltac:(solve_learnable).
+
+      (** <<constexpr initializer_list(const E*, size_t) noexcept;>>
+
+          The constructor the *compiler* calls for a braced-init-list; it is
+          private, and [wp_init_initlist_std] in BRiCk reduces [Einitlist_std] to
+          a call of it. See [std_initlist_ctor] there. *)
+      cpp.spec "std::initializer_list<$ty>::initializer_list(const $ty*, unsigned long)"
+        as ctor from source templates templates (
+        \\with
+        \this this
+        \arg{p} "" (Vptr p)
+        \arg{n} "" (Vn n)
+        \post this |-> spineR (cQp.m 1) (Mk p n)
+      ).
 
       (** <<constexpr initializer_list() noexcept;>>
 
           <https://eel.is/c++draft/support.initlist.cons> -- an empty list. The
           backing array is empty, so there is no payload. *)
-      Definition default_ctor :=
-        specify.template.ctor initializer_list [] $
-          \this this
-          \post Exists arrayp, this |-> spineR (cQp.m 1) arrayp 0.
-      #[global] Hint Opaque default_ctor : sl_opacity.
-      #[global] Arguments default_ctor : simpl never.
-      Definition SpecFor_default_ctor := RegisterSpec default_ctor.
-      #[global] Existing Instance SpecFor_default_ctor.
+      cpp.spec "std::initializer_list<$ty>::initializer_list()"
+        as default_ctor from source templates templates (
+        \\with
+        \this this
+        \post Exists p, this |-> spineR (cQp.m 1) (Mk p 0)
+      ).
 
       (** The (trivial) destructor.
 
@@ -115,60 +133,53 @@ NES.Begin std.
           <<initializer_list>>, and the enclosing full-expression destroys it.
           It consumes only the spine -- the backing array is a separate
           temporary with its own lifetime. *)
-      Definition dtor :=
-        specify.template.dtor initializer_list $
-          \this this
-          \pre{arrayp n} this |-> spineR (cQp.m 1) arrayp n
-          \post emp.
-      #[global] Hint Opaque dtor : sl_opacity.
-      #[global] Arguments dtor : simpl never.
-      Definition SpecFor_dtor := RegisterSpec dtor.
-      #[global] Existing Instance SpecFor_dtor.
+      cpp.spec "std::initializer_list<$ty>::~initializer_list()"
+        as dtor from source templates templates (
+        \\with
+        \this this
+        \pre{m} this |-> spineR (cQp.m 1) m
+        \post emp
+      ).
 
       (** <<constexpr size_t size() const noexcept;>>
 
           <https://eel.is/c++draft/support.initlist.access> *)
-      Definition size :=
-        let qf := function_qualifiers.Nc in
-        specify.template.method initializer_list "size" qf Tsize_t [] $
-          \this this
-          \prepost{q arrayp n} this |-> spineR q arrayp n
-          \post[Vn n] emp.
-      #[global] Hint Opaque size : sl_opacity.
-      #[global] Arguments size : simpl never.
-      Definition SpecFor_size := RegisterSpec size.
-      #[global] Existing Instance SpecFor_size.
+      cpp.spec "std::initializer_list<$ty>::size() const"
+        as size from source templates templates (
+        \\with
+        \this this
+        \prepost{q m} this |-> spineR q m
+        \post[Vn m.(len)] emp
+      ).
 
       (** <<constexpr const E* begin() const noexcept;>>
 
           <https://eel.is/c++draft/support.initlist.access> *)
-      Definition begin :=
-        let qf := function_qualifiers.Nc in
-        specify.template.method initializer_list "begin" qf (Tptr (Tconst ty)) [] $
-          \this this
-          \prepost{q arrayp n} this |-> spineR q arrayp n
-          \post[Vptr arrayp] emp.
-      #[global] Hint Opaque begin : sl_opacity.
-      #[global] Arguments begin : simpl never.
-      Definition SpecFor_begin := RegisterSpec begin.
-      #[global] Existing Instance SpecFor_begin.
+      cpp.spec "std::initializer_list<$ty>::begin() const"
+        as begin from source templates templates (
+        \\with
+        \this this
+        \prepost{q m} this |-> spineR q m
+        \post[Vptr m.(arrayp)] emp
+      ).
 
       (** <<constexpr const E* end() const noexcept;>>
 
           <https://eel.is/c++draft/support.initlist.access>: one past the last
           element, i.e. [begin() + size()]. *)
-      Definition end_ :=
-        let qf := function_qualifiers.Nc in
-        specify.template.method initializer_list "end" qf (Tptr (Tconst ty)) [] $
-          \this this
-          \prepost{q arrayp n} this |-> spineR q arrayp n
-          \post[Vptr (arrayp .[ ty ! Z.of_N n ])] emp.
-      #[global] Hint Opaque end_ : sl_opacity.
-      #[global] Arguments end_ : simpl never.
-      Definition SpecFor_end_ := RegisterSpec end_.
-      #[global] Existing Instance SpecFor_end_.
+      cpp.spec "std::initializer_list<$ty>::end() const"
+        as end_ from source templates templates (
+        \\with
+        \this this
+        \prepost{q m} this |-> spineR q m
+        \post[Vptr (m.(arrayp) .[ ty ! Z.of_N m.(len) ])] emp
+      ).
 
-      Definition specs := default_ctor ** dtor ** size ** begin ** end_.
+      (** NOTE templated [cpp.spec]s are indexed by the translation unit they
+          were resolved against, so this bundle is too: clients write
+          <<std.initializer_list.specs ty source>>. *)
+      Definition specs (tu : translation_unit) :=
+        ctor tu ** default_ctor tu ** dtor tu ** size tu ** begin tu ** end_ tu.
       #[global] Hint Opaque specs : typeclass_instances sl_opacity.
       #[only(knowledge)] derive specs.
     End with_cpp.

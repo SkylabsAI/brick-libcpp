@@ -4,9 +4,12 @@
  * See the LICENSE-BedRock file in the repository root for details.
  *)
 Require Import skylabs.brick.libstdcpp.initializer_list.spec.
+Require Import skylabs.brick.libstdcpp.initializer_list.hints.
 Require Import skylabs.brick.libstdcpp.test.initializer_list.test_cpp.
 
 Require Import skylabs.auto.cpp.prelude.test.
+
+Import linearity.
 
 (**
     A client of the <<std::initializer_list>> specifications in
@@ -14,7 +17,7 @@ Require Import skylabs.auto.cpp.prelude.test.
 
     [il_size] and [il_first] consume an <<std::initializer_list>> and are
     verified against those (axiomatized) specifications -- [il_size] against the
-    spine alone, [il_first] against the bundled (templated) [R_at].
+    spine alone, [il_first] against the bundled [R_at].
 
     [use_size] and [use_first] *construct* one from a braced-init-list, so
     verifying them additionally exercises clang's [CXXStdInitializerListExpr]
@@ -36,10 +39,11 @@ Definition BoxedR `{Σ : cpp_logic, σ : genv} (q : cQp.t) (n : N) : Rep :=
 Section with_cpp.
   Context `{Σ : cpp_logic, σ : genv}.
 
-  #[local] Abbreviation spineR q arrayp n :=
-    (std.initializer_list.spineR Tint q arrayp n) (only parsing).
-  #[local] Abbreviation R_at q qx arrayp xs :=
-    (std.initializer_list.R_at Tint q qx arrayp xs) (only parsing).
+  #[local] Abbreviation spineR q m :=
+    (std.initializer_list.spineR Tint q m) (only parsing).
+  #[local] Abbreviation R_at q qx p xs :=
+    (std.initializer_list.R_at Tint q qx p xs) (only parsing).
+  #[local] Abbreviation Mk := std.initializer_list.Mk (only parsing).
 
   Section specs.
     Context `{MOD : test_cpp.source ⊧ σ}.
@@ -47,14 +51,14 @@ Section with_cpp.
     (** Only the spine is needed to read the size. *)
     cpp.spec "il_size(std::initializer_list<int>)" as il_size_spec with
       (\arg{lp} "l" (Vptr lp)
-       \prepost{q arrayp n} lp |-> spineR q arrayp n
+       \prepost{q p n} lp |-> spineR q (Mk p n)
        \post[Vn n] emp).
 
     (** Reading an element needs the payload as well, so this is stated against
-        the bundled (templated) form [std.initializer_list.R_at]. *)
+        the bundled form [std.initializer_list.R_at]. *)
     cpp.spec "il_first(std::initializer_list<int>)" as il_first_spec with
       (\arg{lp} "l" (Vptr lp)
-       \prepost{q qx arrayp x xs} lp |-> R_at q qx arrayp (x :: xs)
+       \prepost{q qx p x xs} lp |-> R_at q qx p (x :: xs)
        \post[Vint x] emp).
 
     cpp.spec "use_size()" as use_size_spec with
@@ -68,7 +72,7 @@ Section with_cpp.
     cpp.spec "Boxed::Boxed(std::initializer_list<int>)" as boxed_ctor_spec with
       (\this this
        \arg{lp} "l" (Vptr lp)
-       \prepost{q arrayp n} lp |-> spineR q arrayp n
+       \prepost{q p n} lp |-> spineR q (Mk p n)
        \post this |-> BoxedR 1$m n).
 
     (** <<Boxed>> is trivially destructible, but <<b>> still goes out of scope in
@@ -90,16 +94,9 @@ Section with_cpp.
         the arithmetic side conditions the split leaves behind. *)
     Import normalize.normalize_ptr normalize.only_provable_norm.
 
-    (** [initializer_listR] is abstract, so nothing in a goal determines the
-        backing array or its length syntactically. [initializer_listR_learn],
-        registered in auto, recovers both; without it every proof below would
-        have to instantiate them by hand.
-
-        Only [use_first_ok] below also needs the *fraction* picked for it; it
-        opts into [UNSAFE_initializer_listR_learn_q] per invocation with
-        <<go using>> rather than registering it for the whole section. The two
-        compose: the unsafe hint supplies the fraction while the safe one still
-        supplies the backing array and length. *)
+    (** [spineR]'s model is recovered by the [LearnEqF1] instance registered
+        alongside it, so the proofs below do not have to instantiate the backing
+        array or its length by hand. *)
 
     Lemma il_size_ok : verify[ source ] il_size_spec.
     Proof using MOD. verify_spec. go. Qed.
@@ -130,16 +127,12 @@ Section with_cpp.
         which is why [R_at] carries the two fractions separately. *)
     Lemma use_first_ok : verify[ source ] use_first_spec.
     Proof using MOD.
-      (* the qualified name is deliberate: the hint lives in auto's [hints.wp]
-         alongside the rest of the <<std::initializer_list>> automation, and is
-         not [Import]ed here. *)
-      verify_spec.
-      go using skylabs.auto.cpp.hints.wp.UNSAFE_initializer_listR_learn_q.
-      (* What is left belongs to [array_sliceR], not [initializer_listR]: the
-         payload's fraction and the element split. [pick_frac] does not discharge
-         it (the bound [lengthZ xs + 1] needs [xs] first), and no cons-splitting
-         hint is registered, so these are supplied by hand. *)
-      iExists (cQp.c 1), 7, [8; 9]. go.
+      verify_spec. go.
+      (* What is left belongs to [array_sliceR], not [spineR]: the payload's
+         fraction and the element split. [pick_frac] does not discharge it (the
+         bound [lengthZ xs + 1] needs [xs] first), and no cons-splitting hint is
+         registered, so these are supplied by hand. *)
+      iExists (cQp.m 1), (cQp.c 1), 7, [8; 9]. go.
     Qed.
     Definition use_first_B := [LINK] use_first_ok.
     #[local] Hint Resolve use_first_B : sl_opacity.
@@ -147,12 +140,12 @@ Section with_cpp.
     (** The constructor body is just <<n(l.size())>>, so this is [il_size_ok]
         with the result stored into a field. *)
     Lemma boxed_ctor_ok : verify[ source ] boxed_ctor_spec.
-    Proof using MOD. verify_spec. rewrite /BoxedR; go. Qed.
+    Proof using MOD. verify_spec. go. Qed.
     Definition boxed_ctor_B := [LINK] boxed_ctor_ok.
     #[local] Hint Resolve boxed_ctor_B : sl_opacity.
 
     Lemma boxed_dtor_ok : verify[ source ] boxed_dtor_spec.
-    Proof using MOD. verify_spec. rewrite /BoxedR; go. Qed.
+    Proof using MOD. verify_spec. go. Qed.
     Definition boxed_dtor_B := [LINK] boxed_dtor_ok.
     #[local] Hint Resolve boxed_dtor_B : sl_opacity.
 
@@ -166,16 +159,13 @@ Section with_cpp.
     Definition use_ctor_B := [LINK] use_ctor_ok.
     #[local] Hint Resolve use_ctor_B : sl_opacity.
 
-    (** TODO a [specs_ok] gluing lemma, of the form
-        <<
-          denoteModule source ** |> std.initializer_list.specs Tint
-          |-- il_size_spec ** il_first_spec ** use_size_spec ** use_first_spec
-        >>
-        in the style of [std.vector]'s. [work] does not discharge it as written:
-        it consumes [std.initializer_list.dtor] once, but all four client
-        functions need it, and neither destructing the bundle nor boxing it with
-        [|_|] made it reusable. Each client function above *is* separately
-        verified against the registered specifications, so this is a packaging
-        convenience rather than missing coverage. *)
+    (** The client specifications, discharged from the <<std::initializer_list>>
+        specifications they depend on. *)
+    Lemma specs_ok :
+      denoteModule source **
+      ▷ std.initializer_list.specs Tint source
+      |-- il_size_spec ** il_first_spec ** use_size_spec ** use_first_spec **
+          boxed_ctor_spec ** boxed_dtor_spec ** use_ctor_spec.
+    Proof using MOD. rewrite /std.initializer_list.specs. work. Qed.
   End proofs.
 End with_cpp.
