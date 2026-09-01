@@ -6,6 +6,7 @@ Import linearity.
 
 Section with_cpp.
   Context `{Σ : cpp_logic, σ : genv} {HAS_THREADS : HasStdThreads Σ}.
+  Context `{!lockG Σ}.
 
   cpp.spec "test_mutex()" as test_mutex_spec from source with (\post emp).
 
