@@ -13,9 +13,9 @@ Require Export skylabs.brick.libstdcpp.runtime.pred.
 Require Import skylabs.brick.libstdcpp.mutex.inc_hpp.
 Require Import skylabs.brick.libstdcpp.mutex.requirements.
 Require Import skylabs.brick.libstdcpp.lib.lock_ghost.
+Export skylabs.brick.libstdcpp.lib.lock_ghost(lockG).
 
 Import linearity.
-Import lock_ghost.
 
 (* TODO UPSTREAM. *)
 #[global] Instance SplitRecord_prod A B : SplitRecord (@prod A B) := {}.
@@ -30,14 +30,14 @@ Section with_cpp.
   #[global] Declare Instance R_learnable : forall {HAS_THREADS : HasStdThreads Σ} {σ : genv},
       Cbn (Learn (learn_eq ==> any ==> learn_eq ==> learn_hints.fin) R).
 
-  (* Section with_RepFor.
+  Section with_RepFor.
     Import rep.RepFor.
     Import RepScheme.
 
     #[global] Instance repfor `{!HasStdThreads Σ} {σ : genv} :
       rep.RepFor.C "std::mutex" [ArgType.Constant _; ArgType.CFrac; ArgType.Constant _]
         (funI γ q P => R γ q P) := {}.
-  End with_RepFor. *)
+  End with_RepFor.
 
 
   (** A resource enforcing that the thread calling unlock must be the same thread
