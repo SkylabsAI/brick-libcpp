@@ -16,13 +16,14 @@ std::mutex protocol:
 - can't be destroyed while held.
 */
 class MyMutex {
-  std::atomic<bool> m_lock{false};
+  // std::atomic<bool> m_lock{false};
+  std::atomic<int> m_lock{0};
 
   std::thread::id m_owner{};
 
   // "Actual locking"
   void do_lock() {
-    while (m_lock.exchange(true)) {
+    while (m_lock.exchange(1)) {
       // Yielding helps scheduling, and makes this loop obviously not UB
       // (under https://eel.is/c++draft/intro.progress#1.2).
       // Calling exchange might qualify under
@@ -32,7 +33,7 @@ class MyMutex {
   }
 
   void do_unlock() {
-    m_lock = false;
+    m_lock = 0;
   }
 public:
 
@@ -60,7 +61,7 @@ public:
   }
 
   ~MyMutex() {
-    assert(!m_lock);
+    assert(m_lock == 0);
     assert(m_owner == std::thread::id()); //unowned
   }
 };
