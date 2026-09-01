@@ -12,7 +12,9 @@ Module custom_mutex.
   Abbreviation N := "MyMutex"%cpp_name.
 
 
-  Parameter atomic_thread_idT : ∀ `{Σ : cpp_logic, σ : genv}, cQp.t -> option thread_idT -> Rep.
+  Parameter atomic_thread_idT : ∀ `{Σ : cpp_logic, σ : genv}, cQp.t -> 
+    (* None if value is thread::id(), Some otherwise *) 
+    option thread_idT -> Rep.
 
   Parameter exclusive_token : ∀ `{Σ : cpp_logic}, iprop.gname -> mpred.
   Parameter owner_token_auth : ∀ `{Σ : cpp_logic}, iprop.gname -> option thread_idT -> mpred.
@@ -45,15 +47,21 @@ Module custom_mutex.
          _field "MyMutex::m_owner" |-> atomic_thread_idT 1$m o_owner.
 
     Definition mutex_inv (this : ptr) (γ : gname) (P : mpred) : mpred :=
-      ∃ o_owner, this ,, _field "MyMutex::m_owner" |-> atomic_thread_idT 1$m o_owner **
+      ∃ o_owner,
       owner_token_frac γ.(phys_state_gname) o_owner **
       ∃ b : bool,
       this ,, _field "MyMutex::m_lock" |-> atomic.R "bool" 1$m b **
       if b then
-        ∃ owner, [| Some owner = o_owner |]
+        emp
       else
         owner_token_auth γ.(phys_state_gname) o_owner **
-        P.
+        P **
+        (** m_owner does not concern do_lock() and do_unlock(), the actual
+          implementation of mutex, and does not always equal o_owner.
+          It is just a resource that one can get from the invariant. *)
+        ∃ m_owner : option thread_idT,
+        this ,, _field "MyMutex::m_owner" |-> atomic_thread_idT 1$m m_owner
+    .
 
     Definition IR (γ : gname) (q : cQp.t) (P : mpred) : Rep :=
       structR N q$m **
@@ -62,18 +70,42 @@ Module custom_mutex.
         cinv_own γ.(cinv_gname) q
       ).
 
-    Section proof.
 
-      Context `{MOD : source ⊧ σ}.
-      Context {HAS_THREADS : HasStdThreads Σ}.
 
-      cpp.spec "MyMutex::MyMutex()" as ctor_spec with (
-        \this this
-        \pre{P} ▷P
-        \post Exists g, this |-> IR g 1$m P ** used_threads g.(user_gname) ∅).
+    Context `{MOD : source ⊧ σ}.
+    Context {HAS_THREADS : HasStdThreads Σ}.
 
-    End proof.
+    cpp.spec "MyMutex::MyMutex()" as ctor_spec with (
+      \this this
+      \pre{P} ▷P
+      \post Exists g, this |-> IR g 1$m P ** used_threads g.(user_gname) ∅).
+
+    cpp.spec "MyMutex::~MyMutex()" as dtor_spec with (
+      \this this
+      \pre{g P} this |-> IR g 1$m P ** used_threads g.(user_gname) ∅
+      \post P).
+
+    cpp.spec "MyMutex::do_lock()" as lock_spec with (
+      \this this
+      \prepost{q P g} this |-> IR g q P
+      \persist{thr} current_thread thr
+      \pre user g.(user_gname) thr
+      \post ▷ P ** locked g thr).
+    
+    cpp.spec "MyMutex::do_unlock()" as unlock_spec with (
+      \this this
+      \prepost{q P g} this |-> IR g q P
+      \persist{thr} current_thread thr
+      \pre locked g thr
+      \pre ▷P
+      \post user g.(user_gname) thr).
+
+    (* Axiom *)
+    cpp.spec "std::this_thread::yield()" as yield_spec with (
+      \post emp).
+    
+    Import std.atomic.
+    Fail Lemma test_do_lock_ok : verify[source] "MyMutex::do_lock()".
 
   End with_Σ.
-
 End custom_mutex.
