@@ -12,8 +12,8 @@ Module custom_mutex.
   Abbreviation N := "MyMutex"%cpp_name.
 
 
-  Parameter atomic_thread_idT : ∀ `{Σ : cpp_logic, σ : genv}, cQp.t -> 
-    (* None if value is thread::id(), Some otherwise *) 
+  Parameter atomic_thread_idT : ∀ `{Σ : cpp_logic, σ : genv}, cQp.t ->
+    (* None if value is thread::id(), Some otherwise *)
     option thread_idT -> Rep.
 
   Parameter exclusive_token : ∀ `{Σ : cpp_logic}, iprop.gname -> mpred.
@@ -28,7 +28,7 @@ Module custom_mutex.
 
   Definition lock_namespace : namespace := nroot .@@ "MyMutex".
 
-  Definition locked `{Σ : cpp_logic} `{!lockG Σ} (g: gname) (th : thread_idT) : mpred 
+  Definition locked `{Σ : cpp_logic} `{!lockG Σ} (g: gname) (th : thread_idT) : mpred
     := owner_token_auth g.(phys_state_gname) (Some th) ** user g.(user_gname) th.
 
   (* Definition IR `{Σ : cpp_logic, σ : genv, !HasStdThreads Σ, !recursive_mutex.lockedG Σ} (γ : gname) (q : cQp.t) : mpred :=
@@ -91,7 +91,7 @@ Module custom_mutex.
       \persist{thr} current_thread thr
       \pre user g.(user_gname) thr
       \post ▷ P ** locked g thr).
-    
+
     cpp.spec "MyMutex::do_unlock()" as unlock_spec with (
       \this this
       \prepost{q P g} this |-> IR g q P
@@ -103,7 +103,7 @@ Module custom_mutex.
     (* Axiom *)
     cpp.spec "std::this_thread::yield()" as yield_spec with (
       \post emp).
-    
+
     Import std.atomic.
     Fail Lemma test_do_lock_ok : verify[source] "MyMutex::do_lock()".
 
