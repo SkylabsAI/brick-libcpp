@@ -50,17 +50,17 @@ Module custom_mutex.
       ∃ o_owner,
       owner_token_frac γ.(phys_state_gname) o_owner **
       ∃ b : bool,
-      this ,, _field "MyMutex::m_lock" |-> atomic.R "bool" 1$m b **
-      if b then
+      this ,, _field "MyMutex::m_lock" |-> atomic.R "int" 1$m (if b then 1 else 0)%Z **
+      (if b then
         emp
       else
         owner_token_auth γ.(phys_state_gname) o_owner **
-        P **
-        (** m_owner does not concern do_lock() and do_unlock(), the actual
-          implementation of mutex, and does not always equal o_owner.
-          It is just a resource that one can get from the invariant. *)
-        ∃ m_owner : option thread_idT,
-        this ,, _field "MyMutex::m_owner" |-> atomic_thread_idT 1$m m_owner
+        P) **
+      (** m_owner does not concern do_lock() and do_unlock(), the actual
+        implementation of mutex, and does not always equal o_owner.
+        It is just a resource that one can get from the invariant. *)
+      ∃ m_owner : option thread_idT,
+      this ,, _field "MyMutex::m_owner" |-> atomic_thread_idT 1$m m_owner
     .
 
     Definition IR (γ : gname) (q : cQp.t) (P : mpred) : Rep :=
