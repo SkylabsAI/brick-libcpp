@@ -12,14 +12,15 @@ Module custom_mutex.
   Abbreviation N := "MyMutex"%cpp_name.
 
 
-  Parameter atomic_thread_idT : ∀ `{Σ : cpp_logic, σ : genv}, cQp.t ->
+  Parameter thread_idR : ∀ `{Σ : cpp_logic, σ : genv}, cQp.t ->
     (* None if value is thread::id(), Some otherwise *)
     option thread_idT -> Rep.
-  #[only(timeless)] derive atomic_thread_idT.
+  #[only(timeless)] derive thread_idR.
 
-  Parameter exclusive_token : ∀ `{Σ : cpp_logic}, iprop.gname -> mpred.
   Parameter owner_token_auth : ∀ `{Σ : cpp_logic}, iprop.gname -> option thread_idT -> mpred.
   Parameter owner_token_frac : ∀ `{Σ : cpp_logic}, iprop.gname -> option thread_idT -> mpred.
+  #[only(timeless, exclusive)] derive owner_token_auth.
+  #[only(timeless, exclusive)] derive owner_token_frac.
 
   Record gname : Set := MkGname
   { user_gname : iprop.gname
@@ -29,8 +30,10 @@ Module custom_mutex.
 
   Definition lock_namespace : namespace := nroot .@@ "MyMutex".
 
-  Definition locked `{Σ : cpp_logic} `{!lockG Σ} (g: gname) (th : thread_idT) : mpred
-    := owner_token_auth g.(phys_state_gname) (Some th) ** user g.(user_gname) th.
+  Definition locked `{Σ : cpp_logic} `{!lockG Σ} `{σ : genv}
+      (γ: gname) (o_thr : option thread_idT) : Rep :=
+    _field "MyMutex::m_owner" |-> thread_idR 1$m o_thr ** pureR (owner_token_frac γ.(phys_state_gname) o_thr).
+  #[only(timeless, exclusive)] derive locked.
 
   (* Definition IR `{Σ : cpp_logic, σ : genv, !HasStdThreads Σ, !recursive_mutex.lockedG Σ} (γ : gname) (q : cQp.t) : mpred :=
     ∃ x, recursive_mutex.owned_count_id_auth γ.(rec_gname) x. *)
@@ -45,23 +48,23 @@ Module custom_mutex.
     Definition mutex_content (γ : gname) : Rep :=
       ∃ o_owner lockedb,
          _field "MyMutex::m_lock" |-> atomic.R "bool" 1$m lockedb **
-         _field "MyMutex::m_owner" |-> atomic_thread_idT 1$m o_owner.
+         _field "MyMutex::m_owner" |-> thread_idR 1$m o_owner.
 
     Definition mutex_inv (this : ptr) (γ : gname) (P : mpred) : mpred :=
-      ∃ o_owner,
-      owner_token_frac γ.(phys_state_gname) o_owner **
       ∃ b : bool,
       this ,, _field "MyMutex::m_lock" |-> atomic.R "int" 1$m (if b then 1 else 0)%Z **
+      ∃ o_owner : option thread_idT,
+      owner_token_auth γ.(phys_state_gname) o_owner **
       (if b then
-        emp
+        ∃ th, user γ.(user_gname) th ** [| o_owner = Some th |]
       else
-        owner_token_auth γ.(phys_state_gname) o_owner **
-        P) **
-      (** m_owner does not concern do_lock() and do_unlock(), the actual
-        implementation of mutex, and does not always equal o_owner.
-        It is just a resource that one can get from the invariant. *)
-      ∃ m_owner : option thread_idT,
-      this ,, _field "MyMutex::m_owner" |-> atomic_thread_idT 1$m m_owner
+        (* owner_token γ.(phys_state_gname) o_owner ** *)
+        P **
+        (** m_owner does not concern do_lock() and do_unlock(), the actual
+          implementation of mutex, and does not always equal o_owner.
+          It is just a resource that one can get from the invariant. *)
+        this ,, _field "MyMutex::m_owner" |-> thread_idR 1$m None **
+        owner_token_frac γ.(phys_state_gname) o_owner)
     .
 
     Definition IR (γ : gname) (q : cQp.t) (P : mpred) : Rep :=
@@ -72,8 +75,6 @@ Module custom_mutex.
       ).
     Hint Opaque IR : sl_opacity typeclass_instances.
     #[only(type_ptr,cfractional,ascfractional,cfracvalid)] derive IR.
-
-
 
     Context `{MOD : source ⊧ σ}.
 
@@ -93,14 +94,16 @@ Module custom_mutex.
       \persist{thr} current_thread thr
       \pre user g.(user_gname) thr
       \prepost{q'} _global "std::memory_order_seq_cst" |-> primR "enum std::memory_order" q' (memory_order.to_val memory_order.seq_cst)
-      \post ▷ P ** locked g thr).
+      \post (▷ P **
+            this ,, _field "MyMutex::m_owner" |-> thread_idR 1$m None) **
+            owner_token_frac g.(phys_state_gname) (Some thr)).
 
     cpp.spec "MyMutex::do_unlock()" as unlock_spec with (
       \this this
       \prepost{q P g} this |-> IR g q P
       \persist{thr} current_thread thr
-      \pre locked g thr
       \pre ▷P
+      \pre this |-> locked g (Some thr)
       \post user g.(user_gname) thr).
 
     (* Axiom *)
@@ -108,10 +111,6 @@ Module custom_mutex.
       \post emp).
 
     Abbreviation BASE p := (p ,, _base "std::atomic<int>" "std::__atomic_base<int>").
-
-    #[only(timeless)] derive exclusive_token.
-    #[only(timeless)] derive owner_token_auth.
-    #[only(timeless)] derive owner_token_frac.
 
     Definition bi_later_exist_F := [FWD] @bi.later_exist.
     Definition bi_later_sep_F := [FWD] @bi.later_sep.
@@ -125,10 +124,13 @@ Module custom_mutex.
       \using denoteModule source
       \using{thr} current_thread thr
       \consuming{g q P} p |-> IR g q P
+      \consuming user g.(user_gname) thr
       \proving{K (_ : IsExistential K)}
       std.atomic.do_exchange "int" (BASE (p,, o_field σ "MyMutex::m_lock") ) 1%Z K
       \instantiate K := (fun res => p |-> IR g q P ** [| res = 0 \/ res = 1 |]%Z **
-                          if bool_decide (res = 0) then P ** owner_token_auth g.(phys_state_gname) (Some thr) else emp)
+                          if bool_decide (res = 0) then P ** owner_token_frac g.(phys_state_gname) (Some thr) **
+                            p ,, _field "MyMutex::m_owner" |-> thread_idR 1$m None
+                          else user g.(user_gname) thr)
                           \end@{mpredI}.
     Next Obligation.
       intros. iIntros "[#M ?]" (?? ->).
@@ -142,30 +144,32 @@ Module custom_mutex.
       1: admit. (* can and should be an AC *)
       iMod "Y" as "_"; wpose "Hc"; work.
       wname [cinv] "CI".
-      wname [owner_token_frac] "OG".
+      wname [owner_token_auth] "OA".
       wname [_ |-> atomic.R _ _ _] "FL".
-      wname [_ |-> atomic_thread_idT _ _] "FO".
+      wname [_ |-> thread_idR _ _] "PF".
+      wname [user _ _] "U".
       ren_hyp b bool.
       destruct b eqn:?; work. {
-        iSplitL "OG FO FL"; first last. {
+        iSplitL "OA FL PF"; first last. {
           iModIntro. rewrite /IR/mutex_inv. work $usenamed=true.
           auto.
         }
         work $usenamed=true with br_erefl.
-        iExists _, true.
+        iExists true, _.
         ework $usenamed=true with br_erefl.
       }
-      wname [P] "P".
-      wname [owner_token_auth] "OA".
-      iSplitL "FO OG FL"; first last. {
+      iDestruct "PF" as "(P & ? & OF)".
+      iSplitL "FL OA U"; first last. {
         iModIntro. rewrite /IR/mutex_inv. ework $usenamed=true with br_erefl.
         auto.
         (* perform ghost update, but earlier *)
         admit.
       }
       work $usenamed=true with br_erefl.
-      iExists _, true.
+      iExists true, _.
       ework $usenamed=true with br_erefl.
+      (* should be proved by the previously mentioned ghost update *)
+      admit. 
       all: fail.
 
       (* iSplitL "OG FO I FL"; first last. { *)
@@ -191,7 +195,16 @@ Module custom_mutex.
       verify_spec; go.
       wp_while (fun _ => emp); go; first by ework.
       wp_if; go.
-      rewrite /locked; go.
     Qed.
+
+    Lemma test_do_unlock_ok : verify[source] "MyMutex::do_unlock()".
+    Proof using MOD HAS_THREADS.
+      verify_spec; go.
+      iExists (user g.(user_gname) thr).
+      rewrite /locked.
+      work.
+    Admitted.
+
+
   End with_Σ.
 End custom_mutex.
