@@ -2,10 +2,10 @@
 
 Require Import skylabs.auto.cpp.proof.
 Require Import skylabs.brick.libstdcpp.mutex.spec.mutex.
-Require Import skylabs.brick.libstdcpp.test.mutex.custom_mutex_hpp.
 Require Import skylabs.brick.libstdcpp.lib.lock_ghost.
-Import lock_ghost.
 Require Import skylabs.brick.libstdcpp.atomic.spec.
+
+Require Import skylabs.brick.libstdcpp.test.mutex.custom_mutex_hpp.
 
 Module custom_mutex.
 
