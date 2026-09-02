@@ -11,6 +11,7 @@ Require Import skylabs.brick.libstdcpp.lib.lock_ghost.
 Require Import skylabs.brick.libstdcpp.atomic.spec.
 Require Import skylabs.brick.libstdcpp.cassert.spec.
 
+Import linearity.
 Require Import skylabs.brick.libstdcpp.test.mutex.custom_mutex_hpp.
 
 Module custom_mutex.
@@ -68,16 +69,6 @@ Module custom_mutex.
     WeaklyObjective (PROP := iPropI _) (owner_token_frac γ o_thr).
   Proof. rewrite owner_token_frac.unlock. apply _. Qed.
 
-  Lemma owner_token_agree `{Σ : cpp_logic, !ownerG Σ}
-      γ (o1 o2 : option thread_idT) :
-    owner_token_auth γ o1 ** owner_token_frac γ o2 |-- [| o1 = o2 |].
-  Proof.
-    rewrite owner_token_auth.unlock owner_token_frac.unlock.
-    iIntros "[A F]".
-    iDestruct (own_valid_2 with "A F") as %HV.
-    iPureIntro.
-    apply leibniz_equiv, excl_auth_agree, HV.
-  Qed.
 
   #[global] Instance owner_token_agree_observe
       `{Σ : cpp_logic, !ownerG Σ} γ (o1 o2 : option thread_idT) :
@@ -87,19 +78,6 @@ Module custom_mutex.
     apply observe_2_intro_only_provable.
     rewrite owner_token_auth.unlock owner_token_frac.unlock.
     iIntros "A F".
-    iDestruct (own_valid_2 with "A F") as %HV.
-    iPureIntro.
-    apply leibniz_equiv, excl_auth_agree, HV.
-  Qed.
-
-  #[global] Instance owner_token_agree_observe_sep
-      `{Σ : cpp_logic, !ownerG Σ} γ (o1 o2 : option thread_idT) :
-    Observe [| o1 = o2 |]
-      (owner_token_auth γ o1 ** owner_token_frac γ o2).
-  Proof.
-    apply observe_intro_only_provable.
-    rewrite owner_token_auth.unlock owner_token_frac.unlock.
-    iIntros "[A F]".
     iDestruct (own_valid_2 with "A F") as %HV.
     iPureIntro.
     apply leibniz_equiv, excl_auth_agree, HV.
@@ -145,10 +123,12 @@ Module custom_mutex.
     (* Abbreviation BASE p :=
       (p ,, _base "std::atomic<int>" "std::__atomic_base<int>"). *)
 
+    (*
     Definition mutex_content (γ : gname) : Rep :=
       ∃ o_owner lockedb,
          _field "MyMutex::m_lock" |-> atomic.R "bool" 1$m lockedb **
          _field "MyMutex::m_owner" |-> thread_idR 1$m o_owner.
+    *)
 
     Definition mutex_inv (this : ptr) (γ : gname) (P : mpred) : mpred :=
       ∃ b : bool,
