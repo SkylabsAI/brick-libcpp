@@ -393,14 +393,16 @@ Section with_cpp.
   Lemma test_strchr_ok : verify[source] "test_strchr()".
   Proof.
     verify_spec; go.
-    all: simpl in *; by normalize_ptrs.
+    all: simpl in *; Arith.arith_simpl; normalize_ptrs; go.
+    all: by exfalso.
   Qed.
 
   cpp.spec "test_strrchr()" from source default.
   Lemma test_strrchr_ok : verify[source] "test_strrchr()".
   Proof.
     verify_spec; go.
-    all: simpl in *; by normalize_ptrs.
+    all: simpl in *; Arith.arith_simpl; normalize_ptrs; go.
+    all: by exfalso.
   Qed.
 
   cpp.spec "test_strspn()" from source default.
@@ -415,16 +417,16 @@ Section with_cpp.
   Lemma test_strpbrk_ok : verify[source] "test_strpbrk()".
   Proof.
     verify_spec; go.
-    exfalso.
-    by normalize_ptrs.
+    all: Arith.arith_simpl; normalize_ptrs; go.
+    all: by exfalso.
   Qed.
 
   cpp.spec "test_strstr()" from source default.
   Lemma test_strstr_ok : verify[source] "test_strstr()".
   Proof.
     verify_spec; go.
-    all: exfalso.
-    all: by normalize_ptrs.
+    all: Arith.arith_simpl; normalize_ptrs; go.
+    all: by exfalso.
   Qed.
 
   cpp.spec "test_cstring_slice1()" from source default.
