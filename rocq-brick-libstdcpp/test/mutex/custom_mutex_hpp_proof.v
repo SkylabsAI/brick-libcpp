@@ -311,22 +311,32 @@ Module custom_mutex.
       wname [_ |-> thread_idR _ _] "PF".
       wname [user _ _] "U".
       ren_hyp b bool.
+      iMod "Y" as "_".
       destruct b eqn:Hb.
-      - iMod "Y" as "_".
-        iMod ("Hc" with "[FL OA PF]") as "_".
-        { iNext. iExists true. iFrame. }
+      - iMod ("Hc" with "[FL OA PF]") as "_".
+        { iExists true. ework $usenamed=true with br_erefl. }
         iModIntro. rewrite /IR. work $usenamed=true with br_erefl.
         auto.
       - iDestruct "PF" as "(P & FO & OF)".
         iMod (owner_token_update g.(phys_state_gname) _ _ (Some thr)
           with "[$OA $OF]") as "(OA & OF)".
-        iMod "Y" as "_".
         iMod ("Hc" with "[FL OA U]") as "_".
-        { iNext. iExists true. iFrame. done. }
+        { iExists true. ework $usenamed=true with br_erefl. }
         iModIntro. rewrite /IR. work $usenamed=true with br_erefl.
         auto.
     Admitted.
     Hint Resolve do_exchange_C : sl_opacity.
+
+    #[global] Instance owner_token_frac_excl g :
+      Exclusive1 (owner_token_frac g).
+    Proof.
+      intros; rewrite observe_2_pure owner_token_frac.unlock.
+      apply /observe_2_derive_only_provable.
+      by rewrite excl_auth_frag_op_valid.
+    Qed.
+    Import observe2_fwd.
+    Definition owner_token_frac_excl_F := ltac:(mk_obs2_fwd owner_token_frac_excl).
+    Hint Resolve owner_token_frac_excl_F : sl_opacity.
 
     #[program]
     Definition do_store_C (p : ptr) :=
@@ -363,24 +373,20 @@ Module custom_mutex.
       wname [_ |-> thread_idR _ _] "OwnerField".
       destruct b eqn:Hb.
       - iDestruct "FO" as (owner) "(U & ->)".
-        iDestruct (observe [| Some owner = Some thr |]
-          (owner_token_auth g.(phys_state_gname) (Some owner) **
-           owner_token_frac g.(phys_state_gname) (Some thr))
-          with "[$OA $OF]")
-          as %Hagree.
-        inversion Hagree; subst owner.
+        iDestruct (observe_2 [| Some owner = Some thr |] with "OA OF")
+          as %->%(inj _).
         iEval (rewrite _at_offsetR) in "FL".
         iMod ("Hc" with "[FL OA RP OwnerField OF]") as "_".
         { iNext. iExists false.
           work $usenamed=true with br_erefl.
           iExists (Some thr). iFrame. }
         iModIntro. rewrite /IR. work $usenamed=true with br_erefl.
-      - iDestruct "FO" as "(RP2 & OwnerField2 & OF2)".
-        iEval (rewrite owner_token_frac.unlock) in "OF".
-        iEval (rewrite owner_token_frac.unlock) in "OF2".
-        iDestruct (own_valid_2 with "OF OF2") as %Hvalid.
-        rewrite excl_auth_frag_op_valid in Hvalid.
-        done.
+      -
+        (* TODO AUTO *)
+        Fail by work $usenamed=true.
+        Succeed by iStopProof; work.
+        iDestruct "FO" as "?"; iDestruct "OF" as "?";
+          work using owner_token_frac_excl_F.
     Qed.
     Hint Resolve do_store_C : sl_opacity.
 
