@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: LGPL-2.1 WITH BlueRock Exception for use over network, see repository root for details.
  *)
 Require Import skylabs.auto.cpp.spec.
+Require Import skylabs.bi.weakly_objective.
 Require Import skylabs.cpp.spec.concepts.
 Require skylabs.brick.libstdcpp.atomic.inc_int_cpp.
 
@@ -45,6 +46,8 @@ Module Type ATOMIC_PREDS.
     #[global] Declare Instance R_frac_valid : CFracValid1 R.
     #[global] Declare Instance R_agree : Cbn (Learn (any ==> learn_eq ==> learn_hints.fin) R).
     #[global] Declare Instance R_type : Typed2 (class_name ty) R.
+    #[global] Declare Instance R_weakly_objective q x p :
+      WeaklyObjective (R q x p).
   End R_props.
 
 End ATOMIC_PREDS.
