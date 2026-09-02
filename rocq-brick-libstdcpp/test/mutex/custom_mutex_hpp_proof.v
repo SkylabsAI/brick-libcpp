@@ -477,19 +477,9 @@ Module custom_mutex.
     Proof using MOD HAS_THREADS.
       verify_spec.
       rewrite locked.unlock.
-      go.
-      iExists _, _.
-      go.
-      iExists _, _, _, _.
-      go.
-      iExists _, _.
-      go.
-      iExists _, _.
-      go.
-      iExists _.
-      go.
-      iExists q, m.2, m.1.
-      go.
+      (* TODO AUTO *)
+      Fail by ego.
+      repeat (go; ework).
     Qed.
 
 
