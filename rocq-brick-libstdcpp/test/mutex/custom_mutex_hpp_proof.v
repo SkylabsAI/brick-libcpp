@@ -226,17 +226,17 @@ Module custom_mutex.
       \persist{thr} current_thread thr
       \pre user g.(user_gname) thr
       \prepost{q'} GLOBALS q'
-      \post (P **
-            this ,, _field "MyMutex::m_owner" |-> thread_idR 1$m None) **
+      \post P **
+            this ,, _field "MyMutex::m_owner" |-> thread_idR 1$m None **
             owner_token_frac g.(phys_state_gname) (Some thr)).
 
     cpp.spec "MyMutex::do_unlock()" as do_unlock_spec with (
       \this this
       \prepost{q P g} this |-> IR g q P
       \persist{thr} current_thread thr
-      \pre (▷P **
-            this ,, _field "MyMutex::m_owner" |-> thread_idR 1$m None) **
-            owner_token_frac g.(phys_state_gname) (Some thr)
+      \pre ▷P
+      \pre this ,, _field "MyMutex::m_owner" |-> thread_idR 1$m None
+      \pre owner_token_frac g.(phys_state_gname) (Some thr)
       \post user g.(user_gname) thr).
 
     Definition T : Type := gname * mpred.
