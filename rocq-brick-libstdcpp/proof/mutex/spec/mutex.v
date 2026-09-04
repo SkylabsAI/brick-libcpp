@@ -52,7 +52,6 @@ Section with_cpp.
       Cbn (Learn (req_eq ==> learn_eq ==> req_eq ==> learn_hints.fin) locked).
   Proof. solve_learnable. Qed.
 
-
   cpp.spec "std::mutex::mutex()" as ctor_spec with (
     \this this
     \pre{P} ▷P
@@ -60,7 +59,7 @@ Section with_cpp.
 
   cpp.spec "std::mutex::~mutex()" as dtor_spec with (
     \this this
-    \pre{g P} this |-> R g 1$m P ** token g 1
+    \pre{g P} this |-> R g 1$m P ** token g.(lock_state_gname) 1
     \post P).
 
   (* "Inline" version of these specs. *)
@@ -69,7 +68,7 @@ Section with_cpp.
     \prepost{q P g} this |-> R g q P
     \persist{thr} current_thread thr
     \pre{qt} not_locked g thr qt
-    \post P ** locked g thr qt).
+    \post P ** locked g (Some thr) qt).
 
   Definition do_lock (lk : gname * mpred) (K: mpred) : mpred :=
     let g := lk.1 in
@@ -77,21 +76,21 @@ Section with_cpp.
     ∃ thr qt, current_thread thr ∗ not_locked g thr qt ∗
     (* TODO readd *)
     (* ▷ *)
-    (locked g thr qt ** P -* K).
+    (locked g (Some thr) qt ** P -* K).
   #[global] Arguments do_lock /.
 
   cpp.spec "std::mutex::unlock()" as unlock_spec_alt with (
     \this this
     \prepost{q P g} this |-> R g q P
     \persist{thr} current_thread thr
-    \pre{qt} locked g thr qt
+    \pre{qt} locked g (Some thr) qt
     \pre ▷P
     \post not_locked g thr qt).
 
   Definition do_unlock (lk : gname * mpred) (Q : mpred) : mpred :=
     let g := lk.1 in
     let P := lk.2 in
-    Exists thr qt, current_thread thr ** locked g thr qt ** ▷P **
+    Exists thr qt, current_thread thr ** locked g (Some thr) qt ** ▷P **
     (* TODO readd *)
     (* ▷ *)
     (not_locked g thr qt -* Q).
@@ -102,7 +101,7 @@ Section with_cpp.
     \prepost{q P g} this |-> R g q P
     \persist{th} current_thread th
     \pre{qt} not_locked g th qt
-    \post{b}[Vbool b] if b then P ** locked g th qt else not_locked g th qt).
+    \post{b}[Vbool b] if b then P ** locked g (Some th) qt else not_locked g th qt).
 
   (* Obtain same specs from (Basic)Lockable. *)
   (** <<std::mutex>> implements [BasicLockable] *)
@@ -123,7 +122,7 @@ Section with_cpp.
     let P := lk.2 in
     ∃ thr qt, current_thread thr ∗ not_locked g thr qt ∗
     ∀ b : bool,
-    (if b then P ** locked g thr qt else not_locked g thr qt) -∗ Q b.
+    (if b then P ** locked g (Some thr) qt else not_locked g thr qt) -∗ Q b.
   #[global] Arguments do_try_lock /.
 
   #[global,program] Instance mutex_lockable : Lockable (T:=T) "std::mutex" (λ q γP, R γP.1 q γP.2) :=

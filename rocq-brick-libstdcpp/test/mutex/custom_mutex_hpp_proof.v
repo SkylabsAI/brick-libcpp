@@ -7,18 +7,12 @@ Require Import skylabs.auto.cpp.proof.
 Require Import skylabs.auto.cpp.hints.base_derived.
 Require Import skylabs.brick.libstdcpp.mutex.spec.mutex.
 Require Import skylabs.brick.libstdcpp.mutex.requirements.
-Require Import skylabs.brick.libstdcpp.lib.lock_ghost.
+Require Import skylabs.brick.libstdcpp.lib.lock_ghost2.
 Require Import skylabs.brick.libstdcpp.atomic.spec.
 Require Import skylabs.brick.libstdcpp.cassert.spec.
-
 Import linearity.
 Require Import skylabs.brick.libstdcpp.test.mutex.custom_mutex_hpp.
-
 Module custom_mutex.
-
-  #[local] Existing Instance lock_ghost.has_lock.
-  #[local] Existing Instance lock_ghost.has_lock_upd.
-  #[local] Existing Instance lock_ghost.has_lock_valid.
 
   Abbreviation N := "MyMutex"%cpp_name.
 
@@ -38,75 +32,18 @@ Module custom_mutex.
     WeaklyObjective (p |-> R).
   Proof. rewrite INTERNAL._at_eq. apply _. Qed.
 
-  Canonical Structure owner_stateO := optionO thread_idTO.
-  Canonical Structure owner_tokenR := excl_authR owner_stateO.
-
-  Class ownerG `{Σ : cpp_logic} := {
-    #[local] has_owner_token :: HasOwn (iPropI _Σ) owner_tokenR;
-    #[local] has_owner_token_upd :: HasOwnUpd (iPropI _Σ) owner_tokenR;
-    #[local] has_owner_token_valid :: HasOwnValid (iPropI _Σ) owner_tokenR;
-  }.
-  #[global] Arguments ownerG {_ _} Σ : assert.
-
-  sl.lock
-  Definition owner_token_auth `{Σ : cpp_logic, !ownerG Σ}
-      (γ : iprop.gname) (o_thr : option thread_idT) : mpred :=
-    own γ (●E o_thr).
-  sl.lock
-  Definition owner_token_frac `{Σ : cpp_logic, !ownerG Σ}
-      (γ : iprop.gname) (o_thr : option thread_idT) : mpred :=
-    own γ (◯E o_thr).
-  #[only(timeless, exclusive)] derive owner_token_auth.
-  #[only(timeless, exclusive)] derive owner_token_frac.
-
-  #[global] Instance owner_token_auth_WeaklyObjective
-      `{Σ : cpp_logic, !ownerG Σ} γ o_thr :
-    WeaklyObjective (PROP := iPropI _) (owner_token_auth γ o_thr).
-  Proof. rewrite owner_token_auth.unlock. apply _. Qed.
-
-  #[global] Instance owner_token_frac_WeaklyObjective
-      `{Σ : cpp_logic, !ownerG Σ} γ o_thr :
-    WeaklyObjective (PROP := iPropI _) (owner_token_frac γ o_thr).
-  Proof. rewrite owner_token_frac.unlock. apply _. Qed.
-
-
-  #[global] Instance owner_token_agree_observe
-      `{Σ : cpp_logic, !ownerG Σ} γ (o1 o2 : option thread_idT) :
-    Observe2 [| o1 = o2 |]
-      (owner_token_auth γ o1) (owner_token_frac γ o2).
-  Proof.
-    apply observe_2_intro_only_provable.
-    rewrite owner_token_auth.unlock owner_token_frac.unlock.
-    iIntros "A F".
-    iDestruct (own_valid_2 with "A F") as %HV.
-    iPureIntro.
-    apply leibniz_equiv, excl_auth_agree, HV.
-  Qed.
-
-  Lemma owner_token_update `{Σ : cpp_logic, !ownerG Σ}
-      γ (oa ofrag o' : option thread_idT) :
-    owner_token_auth γ oa ** owner_token_frac γ ofrag |--
-      (|==> owner_token_auth γ o' ** owner_token_frac γ o').
-  Proof.
-    rewrite owner_token_auth.unlock owner_token_frac.unlock.
-    iIntros "[A F]".
-    iMod (own_update_2 with "A F") as "[$ $]";
-      first apply (excl_auth_update _ _ o').
-    done.
-  Qed.
-
   Record gname : Set := MkGname
-  { user_gname : iprop.gname
+  { lock_state_gname : LockState.gname
   ; cinv_gname : iprop.gname
-  ; phys_state_gname : iprop.gname
   }.
 
   Definition lock_namespace : namespace := nroot .@@ "MyMutex".
 
   sl.lock
-  Definition locked `{Σ : cpp_logic} `{!lockG Σ, !ownerG Σ} `{σ : genv}
-      (γ: gname) (o_thr : option thread_idT) : Rep :=
-    _field "MyMutex::m_owner" |-> thread_idR 1$m o_thr ** pureR (owner_token_frac γ.(phys_state_gname) o_thr).
+  Definition locked `{Σ : cpp_logic} `{!LockState.G Σ} `{σ : genv}
+      (γ: gname) (thr : thread_idT) (q : cQp.t) : Rep :=
+    _field "MyMutex::m_owner" |-> thread_idR 1$m (Some thr) ** pureR (LockState.locked γ.(lock_state_gname) (Some thr) q%Qp).
+  #[global] Hint Opaque locked : sl_opacity typeclass_instances.
   #[only(timeless, exclusive)] derive locked.
 
   (* Definition IR `{Σ : cpp_logic, σ : genv, !HasStdThreads Σ, !recursive_mutex.lockedG Σ} (γ : gname) (q : cQp.t) : mpred :=
@@ -118,35 +55,28 @@ Module custom_mutex.
 
   Section with_Σ.
     Context `{Σ : cpp_logic, σ : genv, HAS_THREADS : !HasStdThreads Σ,
-      !lockG Σ, !ownerG Σ}.
-
-    (* Abbreviation BASE p :=
-      (p ,, _base "std::atomic<int>" "std::__atomic_base<int>"). *)
-
-    (*
-    Definition mutex_content (γ : gname) : Rep :=
-      ∃ o_owner lockedb,
-         _field "MyMutex::m_lock" |-> atomic.R "bool" 1$m lockedb **
-         _field "MyMutex::m_owner" |-> thread_idR 1$m o_owner.
-    *)
+      !LockState.G Σ}.
 
     Definition mutex_inv (this : ptr) (γ : gname) (P : mpred) : mpred :=
       ∃ b : bool,
       this ,, _field "MyMutex::m_lock" |->
         atomic.R "int" 1$m (if b then 1 else 0)%Z **
       ∃ o_owner : option thread_idT,
-      owner_token_auth γ.(phys_state_gname) o_owner **
+      LockState.owner_auth γ.(lock_state_gname).(LockState.owner_gname) o_owner **
       (if b then
-        ∃ th, user γ.(user_gname) th ** [| o_owner = Some th |]
+        ∃ th q1 q2,
+          LockState.not_locked γ.(lock_state_gname) th q1 γ.(cinv_gname) **
+          MutexTokens.given_token γ.(lock_state_gname).(LockState.token_gname) q2 **
+          [| (q1 + q2 = 1)%Qp |]
       else
-        (* owner_token γ.(phys_state_gname) o_owner ** *)
+        (* LockState.owner_auth γ.(lock_state_gname) o_owner ** *)
         P **
         (** m_owner does not concern do_lock() and do_unlock(), the actual
           implementation of mutex, and does not always equal o_owner.
           It is just a resource that one can get from the invariant. *)
         this ,, _field "MyMutex::m_owner" |-> thread_idR 1$m None **
-        owner_token_frac γ.(phys_state_gname) o_owner)
-    .
+        LockState.owner_frag γ.(lock_state_gname).(LockState.owner_gname) o_owner **
+        MutexTokens.given_token γ.(lock_state_gname).(LockState.token_gname) 1%Qp).
 
     Definition IR (γ : gname) (q : cQp.t) (P : mpred) : Rep :=
       structR N q$m **
@@ -213,62 +143,66 @@ Module custom_mutex.
       \pre{P} ▷P
       \require WeaklyObjective P
       \post (|={⊤}=> Exists g,
-        this |-> IR g 1$m P ** used_threads g.(user_gname) ∅)).
+        this |-> IR g 1$m P ** LockState.token g.(lock_state_gname) 1%Qp)).
 
     cpp.spec "MyMutex::~MyMutex()" as dtor_spec with (
       \this this
-      \pre{g P} this |-> IR g 1$m P ** used_threads g.(user_gname) ∅
+      \pre{g P} this |-> IR g 1$m P ** LockState.token g.(lock_state_gname) 1%Qp
       \post P).
 
     cpp.spec "MyMutex::do_lock()" as do_lock_spec with (
       \this this
-      \prepost{q P g} this |-> IR g q P
+      \prepost{g q P} this |-> IR g q P
       \persist{thr} current_thread thr
-      \pre user g.(user_gname) thr
+      \pre LockState.not_locked g.(lock_state_gname) thr q g.(cinv_gname)
       \prepost{q'} GLOBALS q'
-      \post P **
+      (* does not have to be q, but easier if it is *)
+      \post (P **
             this ,, _field "MyMutex::m_owner" |-> thread_idR 1$m None **
-            owner_token_frac g.(phys_state_gname) (Some thr)).
+            LockState.owner_frag g.(lock_state_gname).(LockState.owner_gname) (Some thr))).
 
     cpp.spec "MyMutex::do_unlock()" as do_unlock_spec with (
       \this this
-      \prepost{q P g} this |-> IR g q P
+      \prepost{g q P} this |-> IR g q P
       \persist{thr} current_thread thr
       \pre ▷P
       \pre this ,, _field "MyMutex::m_owner" |-> thread_idR 1$m None
-      \pre owner_token_frac g.(phys_state_gname) (Some thr)
-      \post user g.(user_gname) thr).
+      \pre LockState.owner_frag g.(lock_state_gname).(LockState.owner_gname) (Some thr)
+      \post LockState.not_locked g.(lock_state_gname) thr q g.(cinv_gname)).
 
-    Definition T : Type := gname * mpred.
+    Definition T : Type := gname * cQp.t * mpred.
 
-    (* FIXME should GLOBALS be in lock specs, instead of do_lock? *)
     Definition do_lock (this : ptr) (lk : T) (K : mpred) : mpred :=
-      let g := lk.1 in
+      let g := lk.1.1 in
+      let q := lk.1.2 in
       let P := lk.2 in
-      ∃ thr q', current_thread thr ** user g.(user_gname) thr ** GLOBALS q' **
-        (GLOBALS q' ** P ** this |-> locked g (Some thr) -* K).
+      ∃ thr q', current_thread thr **
+        LockState.not_locked g.(lock_state_gname) thr q g.(cinv_gname) **
+        GLOBALS q' **
+        (GLOBALS q' ** P ** this |-> locked g thr q -* K).
     #[global] Arguments do_lock /.
 
     Definition do_unlock (this : ptr) (lk : T) (K : mpred) : mpred :=
-      let g := lk.1 in
+      let g := lk.1.1 in
+      let q := lk.1.2 in
       let P := lk.2 in
-      ∃ thr, current_thread thr ** this |-> locked g (Some thr) ** ▷P **
-        (user g.(user_gname) thr -* K).
+      ∃ thr , current_thread thr ** this |-> locked g thr q ** ▷P **
+        (LockState.not_locked g.(lock_state_gname) thr q g.(cinv_gname) -* K).
     #[global] Arguments do_unlock /.
 
     #[global] Instance custom_mutex_basic_lockable :
         BasicLockable (T := T) (Tnamed N)
-          (fun q gP => IR gP.1 q gP.2) :=
+          (fun _ gqP => IR gqP.1.1 gqP.1.2 gqP.2) :=
       { do_lock := do_lock
       ; do_unlock := do_unlock }.
 
     cpp.spec "MyMutex::lock()" as lock_spec with
       (\exact Reduce
-        (lock_basic_lockable (Tnamed N) (fun q gP => IR gP.1 q gP.2))).
+        (lock_basic_lockable (Tnamed N) (fun q gqP => IR gqP.1.1 gqP.1.2 gqP.2))).
 
     cpp.spec "MyMutex::unlock()" as unlock_spec with
       (\exact Reduce
-        (unlock_basic_lockable (Tnamed N) (fun q gP => IR gP.1 q gP.2))).
+        (unlock_basic_lockable (Tnamed N) (fun q gqP => IR gqP.1.1 gqP.1.2 gqP.2))).
 
     cpp.spec "std::this_thread::yield()" as yield_spec with (
       \post emp).
@@ -326,17 +260,6 @@ Module custom_mutex.
         auto.
     Admitted.
     Hint Resolve do_exchange_C : sl_opacity.
-
-    #[global] Instance owner_token_frac_excl g :
-      Exclusive1 (owner_token_frac g).
-    Proof.
-      intros; rewrite observe_2_pure owner_token_frac.unlock.
-      apply /observe_2_derive_only_provable.
-      by rewrite excl_auth_frag_op_valid.
-    Qed.
-    Import observe2_fwd.
-    Definition owner_token_frac_excl_F := ltac:(mk_obs2_fwd owner_token_frac_excl).
-    Hint Resolve owner_token_frac_excl_F : sl_opacity.
 
     #[program]
     Definition do_store_C (p : ptr) :=
