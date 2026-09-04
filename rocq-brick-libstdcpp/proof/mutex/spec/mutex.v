@@ -12,15 +12,18 @@ Require Export skylabs.brick.libstdcpp.runtime.pred.
 
 Require Import skylabs.brick.libstdcpp.mutex.inc_hpp.
 Require Import skylabs.brick.libstdcpp.mutex.requirements.
-Require Import skylabs.brick.libstdcpp.lib.lock_ghost.
-Export skylabs.brick.libstdcpp.lib.lock_ghost(lockG).
+Require Import skylabs.brick.libstdcpp.lib.lock_ghost2.
 
 Import linearity.
 
 (* TODO UPSTREAM. *)
 #[global] Instance SplitRecord_prod A B : SplitRecord (@prod A B) := {}.
 
-Module mutex.
+Module Mutex (State : lock_ghost2.MUTEX_STATE).
+Include State.
+
+#[global] Hint Opaque token not_locked locked : sl_opacity typeclass_instances.
+
 Section with_cpp.
   Context `{Σ : cpp_logic}.
 
@@ -40,56 +43,24 @@ Section with_cpp.
   End with_RepFor.
 
 
-  (** A resource enforcing that the thread calling unlock must be the same thread
-      that owns the lock
-
-    <<
-    \persist{th} >={ L_TI } th
-    \pre{j} mutex_locked g j
-    test_unlock(std::mutex & m) {
-      m.unlock();
-    }
-    >>
-
-    this succeeds:
-
-    <<
-    \persist{th} >={ L_TI } th
-    \pre mutex_locked g th
-    same test_unlock
-    >>
-   *)
-  Parameter locked : forall {HAS_THREADS : HasStdThreads Σ} {σ : genv},
-      gname -> thread_idT -> mpred.
-  #[only(timeless)] derive locked.
-
-  #[only(exclusive)] derive locked.
-
-  Context `{!lockG Σ}.
-
-  Abbreviation used_threads γ s :=
-    (lock_ghost.used_threads γ s).
-
-  Abbreviation users γ ths :=
-    (lock_ghost.users γ ths).
-
-  Abbreviation user γ th := (users γ {[ th ]}).
+  Context `{!G Σ}.
 
   Context `{MOD : source ⊧ σ}.
   Context {HAS_THREADS : HasStdThreads Σ}.
 
-  #[global] Instance locked_learn : Cbn (Learn (req_eq ==> learn_eq ==> learn_hints.fin) locked).
+  #[global] Instance locked_learn :
+      Cbn (Learn (req_eq ==> learn_eq ==> req_eq ==> learn_hints.fin) locked).
   Proof. solve_learnable. Qed.
 
 
   cpp.spec "std::mutex::mutex()" as ctor_spec with (
     \this this
     \pre{P} ▷P
-    \post Exists g, this |-> R g 1$m P ** used_threads g ∅).
+    \post Exists g, this |-> R g 1$m P ** token g 1).
 
   cpp.spec "std::mutex::~mutex()" as dtor_spec with (
     \this this
-    \pre{g P} this |-> R g 1$m P ** used_threads g ∅
+    \pre{g P} this |-> R g 1$m P ** token g 1
     \post P).
 
   (* "Inline" version of these specs. *)
@@ -97,41 +68,41 @@ Section with_cpp.
     \this this
     \prepost{q P g} this |-> R g q P
     \persist{thr} current_thread thr
-    \pre user g thr
-    \post P ** locked g thr).
+    \pre{qt} not_locked g thr qt
+    \post P ** locked g thr qt).
 
   Definition do_lock (lk : gname * mpred) (K: mpred) : mpred :=
     let g := lk.1 in
     let P := lk.2 in
-    ∃ thr, current_thread thr ∗ user g thr ∗
+    ∃ thr qt, current_thread thr ∗ not_locked g thr qt ∗
     (* TODO readd *)
     (* ▷ *)
-    (locked g thr ** P -* K).
+    (locked g thr qt ** P -* K).
   #[global] Arguments do_lock /.
 
   cpp.spec "std::mutex::unlock()" as unlock_spec_alt with (
     \this this
     \prepost{q P g} this |-> R g q P
     \persist{thr} current_thread thr
-    \pre locked g thr
+    \pre{qt} locked g thr qt
     \pre ▷P
-    \post user g thr).
+    \post not_locked g thr qt).
 
   Definition do_unlock (lk : gname * mpred) (Q : mpred) : mpred :=
     let g := lk.1 in
     let P := lk.2 in
-    Exists thr, current_thread thr ** locked g thr ** ▷P **
+    Exists thr qt, current_thread thr ** locked g thr qt ** ▷P **
     (* TODO readd *)
     (* ▷ *)
-    (user g thr -* Q).
+    (not_locked g thr qt -* Q).
   #[global] Arguments do_unlock /.
 
   cpp.spec "std::mutex::try_lock()" as try_lock_spec_alt with (
     \this this
     \prepost{q P g} this |-> R g q P
     \persist{th} current_thread th
-    \pre user g th
-    \post{b}[Vbool b] if b then P ** locked g th else user g th).
+    \pre{qt} not_locked g th qt
+    \post{b}[Vbool b] if b then P ** locked g th qt else not_locked g th qt).
 
   (* Obtain same specs from (Basic)Lockable. *)
   (** <<std::mutex>> implements [BasicLockable] *)
@@ -150,9 +121,9 @@ Section with_cpp.
   Definition do_try_lock (lk : gname * mpred) (Q : bool -> mpred) : mpred :=
     let g := lk.1 in
     let P := lk.2 in
-    ∃ thr, current_thread thr ∗ user g thr ∗
+    ∃ thr qt, current_thread thr ∗ not_locked g thr qt ∗
     ∀ b : bool,
-    (if b then P ** locked g thr else user g thr) -∗ Q b.
+    (if b then P ** locked g thr qt else not_locked g thr qt) -∗ Q b.
   #[global] Arguments do_try_lock /.
 
   #[global,program] Instance mutex_lockable : Lockable (T:=T) "std::mutex" (λ q γP, R γP.1 q γP.2) :=
@@ -176,4 +147,8 @@ Section with_cpp.
     iSplit; iApply specify_mono; ework with br_erefl.
   Qed.
 End with_cpp.
-End mutex.
+End Mutex.
+
+(** The standard instantiation.  Clients that need another camera package can
+    instantiate [Mutex] with any implementation of [MUTEX_STATE]. *)
+Module mutex := Mutex lock_ghost2.LockState.

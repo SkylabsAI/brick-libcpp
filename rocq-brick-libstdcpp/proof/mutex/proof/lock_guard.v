@@ -3,14 +3,13 @@ Require Import skylabs.brick.libstdcpp.mutex.spec.mutex.
 Require Import skylabs.brick.libstdcpp.mutex.spec.lock_guard.
 
 Require Import skylabs.brick.libstdcpp.mutex.inc_hpp.
-Require Import skylabs.brick.libstdcpp.lib.lock_ghost.
 
 Import linearity.
 
 Section with_cpp.
   Context `{Σ : cpp_logic, σ : genv}.
   Context {HAS_THREADS : HasStdThreads Σ}.
-  Context `{!lock_ghost.lockG Σ}.
+  Context `{!mutex.G Σ}.
 
   Import lock_guard.
 
@@ -25,7 +24,9 @@ Section with_cpp.
   Proof.
     verify_spec.
     go.
-    by rewrite left_id_L.
+    iExists (mutex.locked g thr qt ** P), qt.
+    go with br_erefl.
+    by rewrite (left_id_L 1%Qp Qp.mul).
   Qed.
 
   Lemma dtor_ok : verify[source] dtor_spec.
@@ -33,7 +34,9 @@ Section with_cpp.
     verify_spec.
     rewrite !R.unlock.
     go.
-    by rewrite !left_id_L.
+    iExists (mutex.not_locked g thr qt), qt.
+    go with br_erefl.
+    by rewrite (left_id_L 1%Qp Qp.mul).
   Qed.
 
 End with_cpp.
