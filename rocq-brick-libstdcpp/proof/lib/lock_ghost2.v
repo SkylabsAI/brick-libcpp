@@ -72,17 +72,17 @@ Module Type MUTEX_STATE.
   }.
   #[global] Arguments G {_ _} Σ : assert.
 
-  Parameter owner_auth : forall `{Σ : cpp_logic, !G Σ},
+  Parameter owner_tid_auth : forall `{Σ : cpp_logic, !G Σ},
     gname -> option thread_idT -> mpred.
-  Parameter owner_frag : forall `{Σ : cpp_logic, !G Σ},
+  Parameter owner_tid_frag : forall `{Σ : cpp_logic, !G Σ},
     gname -> option thread_idT -> mpred.
 
-  #[global] Declare Instance owner_auth_timeless
-      `{Σ : cpp_logic, !G Σ} γ o_thr : Timeless (owner_auth γ o_thr).
-  #[global] Declare Instance owner_frag_timeless
-      `{Σ : cpp_logic, !G Σ} γ o_thr : Timeless (owner_frag γ o_thr).
-  #[global] Declare Instance owner_frag_exclusive
-      `{Σ : cpp_logic, !G Σ} γ : Exclusive1 (owner_frag γ).
+  #[global] Declare Instance owner_tid_auth_timeless
+      `{Σ : cpp_logic, !G Σ} γ o_thr : Timeless (owner_tid_auth γ o_thr).
+  #[global] Declare Instance owner_tid_frag_timeless
+      `{Σ : cpp_logic, !G Σ} γ o_thr : Timeless (owner_tid_frag γ o_thr).
+  #[global] Declare Instance owner_tid_frag_exclusive
+      `{Σ : cpp_logic, !G Σ} γ : Exclusive1 (owner_tid_frag γ).
 
   Parameter token : forall `{Σ : cpp_logic, !G Σ},
     gname -> Qp -> mpred.
@@ -155,8 +155,27 @@ Module MutexSets.
       rewrite my_mutexes_inv.unlock mutex_sets_auth.unlock. apply _.
   Qed.
 
+  #[global] Instance my_mutexes_WeaklyObjective `{Σ : cpp_logic, !G Σ} N γ th M :
+    WeaklyObjective (my_mutexes N γ th M).
+  Proof. rewrite /my_mutexes mutex_sets_frag.unlock. apply _. Qed.
+
+  #[global] Hint Opaque my_mutexes : sl_opacity typeclass_instances.
+
   Section theory.
     Context `{Σ : cpp_logic, !G Σ}.
+
+    Lemma alloc_pool N :
+      ⊢ |={⊤}=> ∃ γpool, inv N (my_mutexes_inv γpool).
+    Proof.
+      iMod (own_alloc
+        (gmap_view_auth (V := agreeR (leibnizO (gset iprop.gname)))
+          (DfracOwn 1) (mutex_sets_view ∅))) as (γpool) "HA".
+      { apply gmap_view_auth_valid. }
+      iMod (inv_alloc N _ (my_mutexes_inv γpool) with "[HA]") as "#HI".
+      { iNext. rewrite my_mutexes_inv.unlock mutex_sets_auth.unlock.
+        iExists ∅. iExact "HA". }
+      iModIntro. iExists γpool. iExact "HI".
+    Qed.
 
     Lemma mutex_sets_frag_exclusive γpool th M1 M2 :
       mutex_sets_frag γpool th M1 ** mutex_sets_frag γpool th M2 |-- False.
@@ -292,8 +311,119 @@ Module MutexTokens.
       `{Σ : cpp_logic, !G Σ} γ q : Timeless (given_token γ q).
   Proof. rewrite /given_token. apply _. Qed.
 
+  (** Ordinary and given-token shares in the invariant add up to one.
+      [token_not_full] contains a positive ordinary-token share, so it conflicts
+      with the full ordinary token required for destruction. *)
+  Definition token_not_full `{Σ : cpp_logic, !G Σ} (γ : iprop.gname) : mpred :=
+    token γ 1 ∨ ∃ qt qg : Qp,
+      [| (qt + qg = 1)%Qp |] ** token γ qt ** given_token γ qg.
+
+  (** Include the endpoint with no ordinary tokens. Transfers preserve the
+      balance even when a caller returns only part of its given-token share. *)
+  Definition token_full `{Σ : cpp_logic, !G Σ} (γ : iprop.gname) : mpred :=
+    given_token γ 1 ∨ token_not_full γ.
+
+  #[global] Instance token_full_WeaklyObjective `{Σ : cpp_logic, !G Σ} γ :
+    WeaklyObjective (token_full γ).
+  Proof. rewrite /token_full /token_not_full /token /given_token. apply _. Qed.
+
+  #[global] Instance token_not_full_WeaklyObjective `{Σ : cpp_logic, !G Σ} γ :
+    WeaklyObjective (token_not_full γ).
+  Proof. rewrite /token_not_full /token /given_token. apply _. Qed.
+
+  #[global] Hint Opaque token given_token token_not_full token_full : sl_opacity typeclass_instances.
+
   Section theory.
     Context `{Σ : cpp_logic, !G Σ}.
+
+    #[local] Existing Instance mpred_BiAffine.
+
+    Lemma token_valid γ q : token γ q |-- [| (q ≤ 1)%Qp |].
+    Proof.
+      rewrite /token. iIntros "H".
+      iDestruct (own_valid with "H") as %Hvalid.
+      iPureIntro. exact (proj1 Hvalid).
+    Qed.
+
+    Lemma given_token_valid γ q : given_token γ q |-- [| (q ≤ 1)%Qp |].
+    Proof.
+      rewrite /given_token. iIntros "H".
+      iDestruct (own_valid with "H") as %Hvalid.
+      iPureIntro. exact (proj2 Hvalid).
+    Qed.
+
+    Lemma token_valid_2 γ q1 q2 :
+      token γ q1 ** token γ q2 |-- [| (q1 + q2 ≤ 1)%Qp |].
+    Proof. rewrite -fractional. apply token_valid. Qed.
+
+    Lemma given_token_valid_2 γ q1 q2 :
+      given_token γ q1 ** given_token γ q2 |-- [| (q1 + q2 ≤ 1)%Qp |].
+    Proof. rewrite -fractional. apply given_token_valid. Qed.
+
+    Lemma token_not_full_full_token γ :
+      token_not_full γ ** token γ 1 |-- False.
+    Proof.
+      rewrite /token_not_full. iIntros "[H T]".
+      iDestruct "H" as "[H | H]".
+      - iDestruct (token_valid_2 with "[$T $H]") as %Hbad.
+        exfalso. exact (Qp.not_add_le_l 1 1 Hbad).
+      - iDestruct "H" as (qt qg) "(_ & H & _)".
+        iDestruct (token_valid_2 with "[$T $H]") as %Hbad.
+        exfalso. exact (Qp.not_add_le_l 1 qt Hbad).
+    Qed.
+
+    Lemma acquire γ q :
+      token_full γ ** token γ q |-- given_token γ q ** token_not_full γ.
+    Proof.
+      rewrite /token_full /token_not_full. iIntros "[H T]".
+      iDestruct "H" as "[H | [H | H]]".
+      - iDestruct (token_valid with "T") as %Hq.
+        apply Qp.le_lteq in Hq as [Hq | ->].
+        + apply Qp.lt_sum in Hq as [r Hr].
+          iEval (rewrite Hr fractional) in "H".
+          iDestruct "H" as "[H R]". iFrame "H".
+          iRight. iExists q, r. iFrame. done.
+        + iFrame "H". iLeft. iExact "T".
+      - iDestruct (token_valid_2 with "[$H $T]") as %Hbad.
+        exfalso. exact (Qp.not_add_le_l 1 q Hbad).
+      - iDestruct "H" as (qt qg) "(%Hsum & T0 & G)".
+        iDestruct (token_valid_2 with "[$T0 $T]") as %Hvalid.
+        rewrite -Hsum in Hvalid.
+        apply Qp.add_le_mono_l, Qp.le_lteq in Hvalid as [Hlt | ->].
+        + apply Qp.lt_sum in Hlt as [r Hr].
+          iEval (rewrite Hr fractional) in "G".
+          iDestruct "G" as "[G R]". iFrame "G".
+          iRight. iExists (qt + q)%Qp, r.
+          iSplit; first (iPureIntro; by rewrite -Qp.add_assoc -Hr).
+          iFrame "R". rewrite fractional. iFrame.
+        + iFrame "G". iLeft. rewrite -Hsum fractional. iFrame.
+    Qed.
+
+    Lemma release γ q :
+      token_not_full γ ** given_token γ q |-- token γ q ** token_full γ.
+    Proof.
+      rewrite /token_full /token_not_full. iIntros "[H G]".
+      iDestruct "H" as "[H | H]".
+      - iDestruct (given_token_valid with "G") as %Hq.
+        apply Qp.le_lteq in Hq as [Hq | ->].
+        + apply Qp.lt_sum in Hq as [r Hr].
+          iEval (rewrite Hr fractional) in "H".
+          iDestruct "H" as "[H R]". iFrame "H".
+          iRight. iRight. iExists r, q. iFrame.
+          iPureIntro. by rewrite Qp.add_comm.
+        + iFrame "H". iLeft. iExact "G".
+      - iDestruct "H" as (qt qg) "(%Hsum & T & G0)".
+        iDestruct (given_token_valid_2 with "[$G $G0]") as %Hvalid.
+        rewrite -Hsum in Hvalid.
+        apply Qp.add_le_mono_r, Qp.le_lteq in Hvalid as [Hlt | ->].
+        + apply Qp.lt_sum in Hlt as [r Hr].
+          iEval (rewrite Hr fractional) in "T".
+          iDestruct "T" as "[T R]". iFrame "T".
+          iRight. iRight. iExists r, (q + qg)%Qp.
+          iSplit; first (iPureIntro; by rewrite Qp.add_assoc (Qp.add_comm r q) -Hr).
+          iFrame "R". rewrite fractional. iFrame.
+        + iFrame "T". iLeft. rewrite -Hsum fractional. iFrame.
+    Qed.
 
     Lemma alloc :
       ⊢ |==> ∃ γ, token γ 1 ** given_token γ 1.
@@ -311,7 +441,7 @@ End MutexTokens.
     optional owner state directly. *)
 Module MakeMutexState
     (Sets0 : MUTEX_SETS)
-    (Tokens0 : MUTEX_TOKENS) : MUTEX_STATE.
+    (Tokens0 : MUTEX_TOKENS) <: MUTEX_STATE.
   Module Sets := Sets0.
   Module Tokens := Tokens0.
 
@@ -334,32 +464,59 @@ Module MakeMutexState
   Class G `{Σ : cpp_logic} := {
     #[global] sets_G :: Sets.G Σ;
     #[global] tokens_G :: Tokens.G Σ;
-    #[local] has_owner :: HasOwn (iPropI _Σ) owner_cmraR;
-    #[local] has_owner_upd :: HasOwnUpd (iPropI _Σ) owner_cmraR;
-    #[local] has_owner_valid :: HasOwnValid (iPropI _Σ) owner_cmraR;
+    #[global] has_owner :: HasOwn (iPropI _Σ) owner_cmraR;
+    #[global] has_owner_upd :: HasOwnUpd (iPropI _Σ) owner_cmraR;
+    #[global] has_owner_valid :: HasOwnValid (iPropI _Σ) owner_cmraR;
   }.
   #[global] Arguments G {_ _} Σ : assert.
 
-  Definition owner_auth `{Σ : cpp_logic, !G Σ}
+  Definition owner_tid_auth `{Σ : cpp_logic, !G Σ}
       (γ : gname) (o_thr : option thread_idT) : mpred :=
     own γ.(owner_gname) ((●E o_thr) : owner_cmraR).
 
-  Definition owner_frag `{Σ : cpp_logic, !G Σ}
+  Definition owner_tid_frag `{Σ : cpp_logic, !G Σ}
       (γ : gname) (o_thr : option thread_idT) : mpred :=
     own γ.(owner_gname) ((◯E o_thr) : owner_cmraR).
 
-  #[global] Hint Opaque owner_auth owner_frag : sl_opacity typeclass_instances.
+  #[global] Hint Opaque owner_tid_auth owner_tid_frag : sl_opacity typeclass_instances.
 
-  #[only(timeless)] derive owner_auth.
-  #[only(timeless)] derive owner_frag.
+  #[only(timeless)] derive owner_tid_auth.
+  #[only(timeless)] derive owner_tid_frag.
 
-  #[global] Instance owner_frag_exclusive
-      `{Σ : cpp_logic, !G Σ} γ : Exclusive1 (owner_frag γ).
+  #[global] Instance owner_tid_frag_exclusive
+      `{Σ : cpp_logic, !G Σ} γ : Exclusive1 (owner_tid_frag γ).
   Proof.
-    intros o_thr1 o_thr2. rewrite /owner_frag.
+    intros o_thr1 o_thr2. rewrite /owner_tid_frag.
     iIntros "H1 H2".
     iDestruct (own_valid_2 with "H1 H2") as %Hvalid.
     move: Hvalid. rewrite excl_auth_frag_op_valid. done.
+  Qed.
+
+  #[global] Instance owner_tid_auth_WeaklyObjective `{Σ : cpp_logic, !G Σ} γ o_thr :
+    WeaklyObjective (owner_tid_auth γ o_thr).
+  Proof. rewrite /owner_tid_auth. apply _. Qed.
+
+  #[global] Instance owner_tid_frag_WeaklyObjective `{Σ : cpp_logic, !G Σ} γ o_thr :
+    WeaklyObjective (owner_tid_frag γ o_thr).
+  Proof. rewrite /owner_tid_frag. apply _. Qed.
+
+  #[global] Instance owner_agree `{Σ : cpp_logic, !G Σ} γ o1 o2 :
+    Observe2 [| o1 = o2 |] (owner_tid_auth γ o1) (owner_tid_frag γ o2).
+  Proof.
+    apply observe_2_intro_only_provable.
+    rewrite /owner_tid_auth /owner_tid_frag. iIntros "A F".
+    iDestruct (own_valid_2 with "A F") as %HV.
+    iPureIntro. apply leibniz_equiv, excl_auth_agree, HV.
+  Qed.
+
+  Lemma owner_update `{Σ : cpp_logic, !G Σ} γ oa ofrag o' :
+    owner_tid_auth γ oa ** owner_tid_frag γ ofrag |--
+      (|==> owner_tid_auth γ o' ** owner_tid_frag γ o').
+  Proof.
+    rewrite /owner_tid_auth /owner_tid_frag. iIntros "[A F]".
+    iMod (own_update_2 with "A F") as "[$ $]";
+      first apply (excl_auth_update _ _ o').
+    done.
   Qed.
 
   Definition token `{Σ : cpp_logic, !G Σ}
@@ -376,7 +533,7 @@ Module MakeMutexState
   Definition locked `{Σ : cpp_logic, !G Σ}
       (γ : gname) (o_thr : option thread_idT) (q : Qp) : mpred :=
     Tokens.given_token γ.(token_gname) q **
-    owner_frag γ o_thr.
+    owner_tid_frag γ o_thr.
 
   Lemma not_locked_eq `{Σ : cpp_logic, !G Σ} γ th q inv_gname :
     not_locked γ th q inv_gname ⊣⊢
@@ -389,7 +546,7 @@ Module MakeMutexState
   Lemma locked_eq `{Σ : cpp_logic, !G Σ} γ o_thr q :
     locked γ o_thr q ⊣⊢
       Tokens.given_token γ.(token_gname) q **
-      owner_frag γ o_thr.
+      owner_tid_frag γ o_thr.
   Proof. done. Qed.
 
   #[global] Instance token_fractional
@@ -410,6 +567,8 @@ Module MakeMutexState
     intros th1 th2. rewrite /locked.
     apply _.
   Qed.
+
+  #[global] Hint Opaque token not_locked locked : sl_opacity typeclass_instances.
 
 End MakeMutexState.
 

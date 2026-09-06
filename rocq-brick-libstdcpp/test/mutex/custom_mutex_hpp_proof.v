@@ -46,37 +46,32 @@ Module custom_mutex.
   #[global] Hint Opaque locked : sl_opacity typeclass_instances.
   #[only(timeless, exclusive)] derive locked.
 
-  (* Definition IR `{Σ : cpp_logic, σ : genv, !HasStdThreads Σ, !recursive_mutex.lockedG Σ} (γ : gname) (q : cQp.t) : mpred :=
-    ∃ x, recursive_mutex.owned_count_id_auth γ.(rec_gname) x. *)
-(*
-    Definition rawR `{Σ : cpp_logic, σ : genv} (owner : option thread_idT) (count : nat) : Rep :=
-      structR "std::recursive_mutex" 1$m **
-      _field "MyRecursiveMutex::m_count" |-> ulonglongR 1$m count. *)
-
   Section with_Σ.
     Context `{Σ : cpp_logic, σ : genv, HAS_THREADS : !HasStdThreads Σ,
       !LockState.G Σ}.
 
+    (** The invariant holds the thread's mutex set while the spinlock is held.
+        Its token balance supports both full and partial ownership transfers. *)
     Definition mutex_inv (this : ptr) (γ : gname) (P : mpred) : mpred :=
       ∃ b : bool,
       this ,, _field "MyMutex::m_lock" |->
         atomic.R "int" 1$m (if b then 1 else 0)%Z **
       ∃ o_owner : option thread_idT,
-      LockState.owner_auth γ.(lock_state_gname).(LockState.owner_gname) o_owner **
+      LockState.owner_tid_auth γ.(lock_state_gname) o_owner **
       (if b then
-        ∃ th q1 q2,
-          LockState.not_locked γ.(lock_state_gname) th q1 γ.(cinv_gname) **
-          MutexTokens.given_token γ.(lock_state_gname).(LockState.token_gname) q2 **
-          [| (q1 + q2 = 1)%Qp |]
+        ∃ th,
+          MutexSets.my_mutexes
+            γ.(lock_state_gname).(LockState.pool_namespace)
+            γ.(lock_state_gname).(LockState.pool_gname) th {[γ.(cinv_gname)]} **
+          [| o_owner = Some th |] **
+          MutexTokens.token_not_full γ.(lock_state_gname).(LockState.token_gname)
       else
-        (* LockState.owner_auth γ.(lock_state_gname) o_owner ** *)
         P **
-        (** m_owner does not concern do_lock() and do_unlock(), the actual
-          implementation of mutex, and does not always equal o_owner.
-          It is just a resource that one can get from the invariant. *)
+        (** The physical owner is cleared before [do_unlock]; the ghost owner
+            records the last acquiring thread until the next acquisition. *)
         this ,, _field "MyMutex::m_owner" |-> thread_idR 1$m None **
-        LockState.owner_frag γ.(lock_state_gname).(LockState.owner_gname) o_owner **
-        MutexTokens.given_token γ.(lock_state_gname).(LockState.token_gname) 1%Qp).
+        LockState.owner_tid_frag γ.(lock_state_gname) o_owner **
+        MutexTokens.token_full γ.(lock_state_gname).(LockState.token_gname)).
 
     Definition IR (γ : gname) (q : cQp.t) (P : mpred) : Rep :=
       structR N q$m **
@@ -159,7 +154,7 @@ Module custom_mutex.
       (* does not have to be q, but easier if it is *)
       \post (P **
             this ,, _field "MyMutex::m_owner" |-> thread_idR 1$m None **
-            LockState.owner_frag g.(lock_state_gname).(LockState.owner_gname) (Some thr))).
+            LockState.locked g.(lock_state_gname) (Some thr) q)).
 
     cpp.spec "MyMutex::do_unlock()" as do_unlock_spec with (
       \this this
@@ -167,7 +162,7 @@ Module custom_mutex.
       \persist{thr} current_thread thr
       \pre ▷P
       \pre this ,, _field "MyMutex::m_owner" |-> thread_idR 1$m None
-      \pre LockState.owner_frag g.(lock_state_gname).(LockState.owner_gname) (Some thr)
+      \pre LockState.locked g.(lock_state_gname) (Some thr) q
       \post LockState.not_locked g.(lock_state_gname) thr q g.(cinv_gname)).
 
     Definition T : Type := gname * cQp.t * mpred.
@@ -196,6 +191,21 @@ Module custom_mutex.
       { do_lock := do_lock
       ; do_unlock := do_unlock }.
 
+    cpp.spec "MyMutex::lock()" as lock_spec_alt with (
+      \this this
+      \prepost{g q P} this |-> IR g q P
+      \persist{thr} current_thread thr
+      \pre LockState.not_locked g.(lock_state_gname) thr q g.(cinv_gname)
+      \prepost{q'} GLOBALS q'
+      \post P ** this |-> locked g thr q).
+
+    cpp.spec "MyMutex::unlock()" as unlock_spec_alt with (
+      \this this
+      \prepost{g q P} this |-> IR g q P
+      \persist{thr} current_thread thr
+      \pre this |-> locked g thr q ** ▷P
+      \post LockState.not_locked g.(lock_state_gname) thr q g.(cinv_gname)).
+
     cpp.spec "MyMutex::lock()" as lock_spec with
       (\exact Reduce
         (lock_basic_lockable (Tnamed N) (fun q gqP => IR gqP.1.1 gqP.1.2 gqP.2))).
@@ -203,6 +213,32 @@ Module custom_mutex.
     cpp.spec "MyMutex::unlock()" as unlock_spec with
       (\exact Reduce
         (unlock_basic_lockable (Tnamed N) (fun q gqP => IR gqP.1.1 gqP.1.2 gqP.2))).
+
+    Lemma lock_spec_entails_lock_spec_alt : lock_spec -|- lock_spec_alt.
+    Proof.
+      iSplit; iApply specify_mono; ework with br_erefl.
+      lazymatch goal with
+      | |- environments.envs_entails _ ?Ggoal =>
+        lazymatch Ggoal with
+        | context[IR ?gqP.1.1 ?gqP.1.2 ?gqP.2] => unify gqP (g, q, P)
+        end
+      end.
+      ework with br_erefl.
+      Unshelve. all: exact (1$m)%cQp.
+    Qed.
+
+    Lemma unlock_spec_entails_unlock_spec_alt : unlock_spec -|- unlock_spec_alt.
+    Proof.
+      iSplit; iApply specify_mono; ework with br_erefl.
+      lazymatch goal with
+      | |- environments.envs_entails _ ?Ggoal =>
+        lazymatch Ggoal with
+        | context[IR ?gqP.1.1 ?gqP.1.2 ?gqP.2] => unify gqP (g, q, P)
+        end
+      end.
+      ework with br_erefl.
+      Unshelve. all: exact (1$m)%cQp.
+    Qed.
 
     cpp.spec "std::this_thread::yield()" as yield_spec with (
       \post emp).
@@ -221,44 +257,60 @@ Module custom_mutex.
       \using denoteModule source
       \using{thr} current_thread thr
       \consuming{g q P} p |-> IR g q P
-      \consuming user g.(user_gname) thr
+      \consuming LockState.not_locked g.(lock_state_gname) thr q g.(cinv_gname)
       \proving{K (_ : IsExistential K)}
       std.atomic.do_exchange "int" (BASE (p,, o_field σ "MyMutex::m_lock") ) 1%Z K
       \instantiate K := (fun res => p |-> IR g q P ** [| res = 0 \/ res = 1 |]%Z **
-                          if bool_decide (res = 0) then P ** owner_token_frac g.(phys_state_gname) (Some thr) **
+                          if bool_decide (res = 0) then P ** LockState.locked g.(lock_state_gname) (Some thr) q **
                             p ,, _field "MyMutex::m_owner" |-> thread_idR 1$m None
-                          else user g.(user_gname) thr)
+                          else LockState.not_locked g.(lock_state_gname) thr q g.(cinv_gname))
                           \end@{mpredI}.
     Next Obligation.
-      intros. iIntros "[#M ?]" (?? ->).
+      intros. iIntros "[#M Hpre]" (?? ->).
       iDestruct (observe [| _ ⊧ _ |] with "M") as "%".
+      iDestruct "Hpre" as "(#Thr & IR & NL)".
+      iEval (rewrite /IR _at_sep _at_as_Rep) in "IR".
+      iDestruct "IR" as "(S & #CI & CO)".
+      rewrite /std.atomic.do_exchange.
       iAuIntro1. rewrite /atomic1_acc.
-      rewrite {1}/IR/mutex_inv/=; work.
-      wname [cinv] "#?".
-      iInv lock_namespace as "?" "Hc"; work.
-      iDestruct (fupd_mask_subseteq) as ">Y"; [ | iModIntro ]; first solve_ndisj.
-      work.
-      1: admit. (* can and should be an AC *)
-      wname [cinv] "CI".
-      wname [owner_token_auth] "OA".
-      wname [_ |-> atomic.R _ _ _] "FL".
-      wname [_ |-> thread_idR _ _] "PF".
-      wname [user _ _] "U".
-      ren_hyp b bool.
-      iMod "Y" as "_".
-      destruct b eqn:Hb.
-      - iMod ("Hc" with "[FL OA PF]") as "_".
-        { iExists true. ework $usenamed=true with br_erefl. }
-        iModIntro. rewrite /IR. work $usenamed=true with br_erefl.
-        auto.
-      - iDestruct "PF" as "(P & FO & OF)".
-        iMod (owner_token_update g.(phys_state_gname) _ _ (Some thr)
-          with "[$OA $OF]") as "(OA & OF)".
-        iMod ("Hc" with "[FL OA U]") as "_".
-        { iExists true. ework $usenamed=true with br_erefl. }
-        iModIntro. rewrite /IR. work $usenamed=true with br_erefl.
-        auto.
-    Admitted.
+      iInv lock_namespace as "Inv" "Hclose".
+      iDestruct "Inv" as "[Inv CO]".
+      iEval (rewrite /mutex_inv) in "Inv".
+      iDestruct "Inv" as (b) "[>L Inv]".
+      iDestruct "Inv" as (oo) "[>OA State]".
+      iDestruct (fupd_mask_subseteq) as ">Y"; [ | iModIntro ]; first set_solver.
+      iExists (if b then 1 else 0)%Z.
+      iSplitL "L".
+      { ework $usenamed=true with br_erefl. }
+      iSplit.
+      - iIntros "L". iMod "Y" as "_".
+        iMod ("Hclose" with "[L OA State]") as "_".
+        { iNext. rewrite /mutex_inv. iExists b.
+          iSplitL "L"; first by ework $usenamed=true with br_erefl.
+          iExists oo. iFrame. }
+        iModIntro. iFrame.
+      - iNext. iIntros "L". iMod "Y" as "_".
+        destruct b.
+        + iMod ("Hclose" with "[L OA State]") as "_".
+          { iNext. rewrite /mutex_inv. iExists true.
+            iSplitL "L"; first by ework $usenamed=true with br_erefl.
+            iExists oo. iFrame. }
+          iModIntro. rewrite /IR _at_sep _at_as_Rep /=.
+          iFrame "CI". iFrame. iPureIntro. auto.
+        + iDestruct "State" as "(P & Owner & OF & Balance)".
+          iEval (rewrite /LockState.not_locked /LockState.token) in "NL".
+          iDestruct "NL" as "[Sets T]".
+          iDestruct (MutexTokens.acquire with "[$Balance $T]") as "[GT Balance]".
+          iMod (LockState.owner_update _ _ _ (Some thr) with "[$OA $OF]")
+            as "[OA OF]".
+          iMod ("Hclose" with "[L OA Sets Balance]") as "_".
+          { iNext. rewrite /mutex_inv. iExists true.
+            iSplitL "L"; first by ework $usenamed=true with br_erefl.
+            iExists (Some thr). iFrame "OA".
+            iExists thr. iFrame. done. }
+          iModIntro. rewrite /IR _at_sep _at_as_Rep /LockState.locked /=.
+          iFrame "CI". iFrame. iPureIntro. auto.
+    Qed.
     Hint Resolve do_exchange_C : sl_opacity.
 
     #[program]
@@ -269,47 +321,44 @@ Module custom_mutex.
       \consuming{g q P} p |-> IR g q P
       \consuming P
       \consuming p ,, _field "MyMutex::m_owner" |-> thread_idR 1$m None
-      \consuming owner_token_frac g.(phys_state_gname) (Some thr)
+      \consuming LockState.locked g.(lock_state_gname) (Some thr) q
       \proving{K (_ : IsExistential K)}
         std.atomic.do_store "int" (BASE (p ,, o_field σ "MyMutex::m_lock")) 0%Z K
-      \instantiate K := (p |-> IR g q P ** user g.(user_gname) thr)
+      \instantiate K := (p |-> IR g q P ** LockState.not_locked g.(lock_state_gname) thr q g.(cinv_gname))
       \end@{mpredI}.
     Next Obligation.
-      intros. iIntros "[#M ?]" (?? ->).
+      intros. iIntros "[#M Hpre]" (?? ->).
       iDestruct (observe [| _ ⊧ _ |] with "M") as "%".
+      iDestruct "Hpre" as "(#Thr & IR & P & Owner & Locked)".
+      iEval (rewrite /IR _at_sep _at_as_Rep) in "IR".
+      iDestruct "IR" as "(S & #CI & CO)".
+      iEval (rewrite /LockState.locked) in "Locked".
+      iDestruct "Locked" as "[GT OF]".
       rewrite /std.atomic.do_store.
       iAcIntro. rewrite /commit_acc /=.
-      rewrite {1}/IR/mutex_inv /=; work.
-      wname [cinv] "#?".
-      iInv lock_namespace as "?" "Hc"; work.
-      ren_hyp b bool.
-      iExists (if b then 1%Z else 0%Z). iFrame.
-      iApply fupd_mask_intro; first solve_ndisj.
-      iIntros "Y". iNext. iIntros "FL".
-      iMod "Y" as "_".
-      wname [P] "P".
-      wname [_ |-> thread_idR _ _] "FO".
-      wname [owner_token_frac] "OF".
-      wname [owner_token_auth] "OA".
-      iRename "P" into "CI".
-      wname [P] "RP".
-      wname [_ |-> thread_idR _ _] "OwnerField".
-      destruct b eqn:Hb.
-      - iDestruct "FO" as (owner) "(U & ->)".
-        iDestruct (observe_2 [| Some owner = Some thr |] with "OA OF")
-          as %->%(inj _).
-        iEval (rewrite _at_offsetR) in "FL".
-        iMod ("Hc" with "[FL OA RP OwnerField OF]") as "_".
-        { iNext. iExists false.
-          work $usenamed=true with br_erefl.
-          iExists (Some thr). iFrame. }
-        iModIntro. rewrite /IR. work $usenamed=true with br_erefl.
-      -
-        (* TODO AUTO *)
-        Fail by work $usenamed=true.
-        Succeed by iStopProof; work.
-        iDestruct "FO" as "?"; iDestruct "OF" as "?";
-          work using owner_token_frac_excl_F.
+      iInv lock_namespace as "Inv" "Hclose".
+      iDestruct "Inv" as "[Inv CO]".
+      iEval (rewrite /mutex_inv) in "Inv".
+      iDestruct "Inv" as (b) "[>L Inv]".
+      iDestruct "Inv" as (oo) "[>OA State]".
+      iDestruct (fupd_mask_subseteq) as ">Y"; [ | iModIntro ]; first set_solver.
+      iExists (if b then 1 else 0)%Z.
+      iSplitL "L"; first by ework $usenamed=true with br_erefl.
+      iNext. iIntros "L". iMod "Y" as "_".
+      destruct b.
+      - iDestruct "State" as (owner) "(Sets & %Heq & Balance)".
+        iDestruct (observe_2 [| oo = Some thr |] with "OA OF") as %Howner.
+        have -> : owner = thr by congruence.
+        iDestruct (MutexTokens.release with "[$Balance $GT]") as "[T Balance]".
+        iMod ("Hclose" with "[L OA P Owner OF Balance]") as "_".
+        { iNext. rewrite /mutex_inv. iExists false.
+          iSplitL "L"; first by ework $usenamed=true with br_erefl.
+          iExists oo. iFrame. by rewrite Howner. }
+        iModIntro.
+        rewrite /IR _at_sep _at_as_Rep /LockState.not_locked /=.
+        iFrame "CI". iFrame.
+      - iDestruct "State" as "(P0 & Owner0 & OF0 & Balance0)".
+        iDestruct (LockState.owner_tid_frag_exclusive with "OF0 OF") as %[].
     Qed.
     Hint Resolve do_store_C : sl_opacity.
 
@@ -349,24 +398,43 @@ Module custom_mutex.
       verify_spec; go.
     Qed.
 
+    Lemma mymutex_lock_alt_proof : verify[source] lock_spec_alt.
+    Proof using MOD HAS_THREADS.
+      verify_spec; ego.
+      rewrite locked.unlock.
+      ego.
+    Qed.
+
+    Lemma mymutex_unlock_alt_proof : verify[source] unlock_spec_alt.
+    Proof using MOD HAS_THREADS.
+      verify_spec.
+      rewrite locked.unlock.
+      repeat (go; ework).
+    Qed.
+
     Lemma mymutex_ctor_proof : verify[source] "MyMutex::MyMutex()".
     Proof using MOD HAS_THREADS.
       verify_spec; go.
       wname [structR] "S".
-      iMod (own_alloc (● (GSet ∅ : lock_ghostUR))) as (gu) "UT".
-      { apply auth_auth_valid. done. }
-      iMod (own_alloc (●E None ⋅ ◯E None)) as (gp) "O".
+      wname [P] "P".
+      wname [_ |-> atomic.R _ _ _] "L".
+      wname [_ |-> thread_idR _ _] "Owner".
+      iMod (MutexSets.alloc_pool (nroot .@@ "MyMutexPool")) as (gp) "#Pool".
+      iMod (MutexTokens.alloc) as (gt) "[T GT]".
+      iMod (own_alloc ((●E None ⋅ ◯E None) : LockState.owner_cmraR)) as (go) "O".
       { apply excl_auth_valid. }
-      iDestruct (own_op with "O") as "(OA & OF)".
-      iMod (cinv_alloc ⊤ lock_namespace
-        (mutex_inv this (MkGname gu gu gp) P) with "[-S UT]")
-        as (gi) "(#CI & CO)"; last first.
-      - iExists (MkGname gu gi gp).
-        rewrite /IR used_threads.unlock /=.
-        iModIntro. go $usenamed=true with br_erefl.
-      - rewrite /mutex_inv owner_token_auth.unlock
-          owner_token_frac.unlock /=.
-        iNext. iExists false. iFrame.
+      iDestruct (own_op with "O") as "[OA OF]".
+      pose (gs := LockState.MkGname (nroot .@@ "MyMutexPool") gp gt go).
+      iMod (cinv_alloc_cofinite ∅ ⊤ lock_namespace) as (gi) "(_ & CO & Halloc)".
+      iMod ("Halloc" $! (mutex_inv this (MkGname gs gi) P)
+        with "[] [L P Owner OA OF GT]") as "#CI".
+      { iPureIntro. rewrite /mutex_inv. apply _. }
+      { iNext. rewrite /mutex_inv /=. iExists false. iFrame "L".
+        iExists None. rewrite /LockState.owner_tid_auth /LockState.owner_tid_frag /gs /=.
+        iFrame. rewrite /MutexTokens.token_full. iLeft. iExact "GT". }
+      iModIntro. iExists (MkGname gs gi).
+      rewrite /IR _at_sep _at_as_Rep /LockState.token /gs /=.
+      iFrame "CI". iFrame.
     Qed.
 
     Lemma mymutex_dtor_proof : verify[source] "MyMutex::~MyMutex()".
@@ -376,33 +444,30 @@ Module custom_mutex.
       work.
       wname [cinv] "#CI".
       wname [cinv_own] "CO".
+      wname [LockState.token] "T".
       iMod (cinv_cancel with "CI CO")
         as "Inv"; [done..|].
       go.
       iDestruct "Inv" as (b) "(Lock & % & OA & State)".
       destruct b eqn:Hb.
-      - iDestruct "State" as (th) "(U & %Eq)".
-        iDestruct (used_threads_empty_no_not_locked with "[$]") as %[].
-      - iDestruct "State" as "(P & Owner & OF)".
+      - iDestruct "State" as (th) "(Sets & %Eq & Balance)".
+        iEval (rewrite /LockState.token) in "T".
+        iDestruct (MutexTokens.token_not_full_full_token with "[$Balance $T]") as %[].
+      - iDestruct "State" as "(P & Owner & OF & Balance)".
         ego $usenamed=true with br_erefl.
-        wname [used_threads] "UT".
-        iApply (affine with "[OA OF UT]"); last iAccu. apply mpred_BiAffine.
-  Qed.
-
-    Lemma mymutex_lock_proof : verify[source] "MyMutex::lock()".
-    Proof using MOD HAS_THREADS.
-      verify_spec.
-      rewrite locked.unlock.
-      ego.
+        iApply (affine with "[OA OF Balance T]"); last iAccu. apply mpred_BiAffine.
     Qed.
 
-    Lemma mymutex_unlock_proof : verify[source] "MyMutex::unlock()".
+    Lemma mymutex_lock_proof : verify[source] lock_spec.
     Proof using MOD HAS_THREADS.
-      verify_spec.
-      rewrite locked.unlock.
-      (* TODO AUTO *)
-      Fail by ego.
-      repeat (go; ework).
+      rewrite lock_spec_entails_lock_spec_alt.
+      exact mymutex_lock_alt_proof.
+    Qed.
+
+    Lemma mymutex_unlock_proof : verify[source] unlock_spec.
+    Proof using MOD HAS_THREADS.
+      rewrite unlock_spec_entails_unlock_spec_alt.
+      exact mymutex_unlock_alt_proof.
     Qed.
 
 

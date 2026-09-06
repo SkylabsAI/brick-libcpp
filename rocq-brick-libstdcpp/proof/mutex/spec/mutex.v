@@ -20,9 +20,21 @@ Import linearity.
 #[global] Instance SplitRecord_prod A B : SplitRecord (@prod A B) := {}.
 
 Module Mutex (State : lock_ghost2.MUTEX_STATE).
-Include State.
 
-#[global] Hint Opaque token not_locked locked : sl_opacity typeclass_instances.
+(** Pair the abstract state with the invariant named by [State.not_locked]. *)
+Record gname : Set := MkGname {
+  lock_state_gname : State.gname;
+  cinv_gname : iprop.gname;
+}.
+
+Definition G := @State.G.
+Existing Class G.
+#[global] Arguments G {_ _} Σ : assert.
+#[global] Instance state_G `{Σ : cpp_logic} (H : G Σ) : State.G Σ := H.
+
+Abbreviation token g q:= (State.token g.(lock_state_gname) q).
+Abbreviation not_locked g th q := (State.not_locked g.(lock_state_gname) th q g.(cinv_gname)).
+Abbreviation locked g o_thr q := (State.locked g.(lock_state_gname) o_thr q).
 
 Section with_cpp.
   Context `{Σ : cpp_logic}.
@@ -49,7 +61,7 @@ Section with_cpp.
   Context {HAS_THREADS : HasStdThreads Σ}.
 
   #[global] Instance locked_learn :
-      Cbn (Learn (req_eq ==> learn_eq ==> req_eq ==> learn_hints.fin) locked).
+      Cbn (Learn (req_eq ==> learn_eq ==> req_eq ==> learn_hints.fin) State.locked).
   Proof. solve_learnable. Qed.
 
   cpp.spec "std::mutex::mutex()" as ctor_spec with (
@@ -59,7 +71,7 @@ Section with_cpp.
 
   cpp.spec "std::mutex::~mutex()" as dtor_spec with (
     \this this
-    \pre{g P} this |-> R g 1$m P ** token g.(lock_state_gname) 1
+    \pre{g P} this |-> R g 1$m P ** token g 1
     \post P).
 
   (* "Inline" version of these specs. *)
