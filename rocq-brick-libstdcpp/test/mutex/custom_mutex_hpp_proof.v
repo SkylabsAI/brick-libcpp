@@ -12,11 +12,13 @@ Require Import skylabs.brick.libstdcpp.atomic.spec.
 Require Import skylabs.brick.libstdcpp.cassert.spec.
 Import linearity.
 Require Import skylabs.brick.libstdcpp.test.mutex.custom_mutex_hpp.
+
 Module custom_mutex.
+
+  Module Spec := mutex_spec LockState.
 
   Abbreviation N := "MyMutex"%cpp_name.
 
-  (* FIXME maybe don't need to split it? *)
   Parameter thread_idR : ∀ `{Σ : cpp_logic, σ : genv}, cQp.t ->
     (* None if value is thread::id(), Some otherwise *)
     option thread_idT -> Rep.
@@ -32,62 +34,10 @@ Module custom_mutex.
     WeaklyObjective (p |-> R).
   Proof. rewrite INTERNAL._at_eq. apply _. Qed.
 
-  Record gname : Set := MkGname
-  { lock_state_gname : LockState.gname
-  ; cinv_gname : iprop.gname
-  }.
-
-  Definition lock_namespace : namespace := nroot .@@ "MyMutex".
-
-  sl.lock
-  Definition locked `{Σ : cpp_logic} `{!LockState.G Σ} `{σ : genv}
-      (γ: gname) (thr : thread_idT) (q : cQp.t) : Rep :=
-    _field "MyMutex::m_owner" |-> thread_idR 1$m (Some thr) ** pureR (LockState.locked γ.(lock_state_gname) (Some thr) q%Qp).
-  #[global] Hint Opaque locked : sl_opacity typeclass_instances.
-  #[only(timeless, exclusive)] derive locked.
-
-  Section with_Σ.
-    Context `{Σ : cpp_logic, σ : genv, HAS_THREADS : !HasStdThreads Σ,
-      !LockState.G Σ}.
-
-    (** The invariant holds the thread's mutex set while the spinlock is held.
-        Its token balance supports both full and partial ownership transfers. *)
-    Definition mutex_inv (this : ptr) (γ : gname) (P : mpred) : mpred :=
-      ∃ b : bool,
-      this ,, _field "MyMutex::m_lock" |->
-        atomic.R "int" 1$m (if b then 1 else 0)%Z **
-      ∃ o_owner : option thread_idT,
-      LockState.owner_tid_auth γ.(lock_state_gname) o_owner **
-      (if b then
-        ∃ th,
-          MutexSets.my_mutexes
-            γ.(lock_state_gname).(LockState.pool_namespace)
-            γ.(lock_state_gname).(LockState.pool_gname) th {[γ.(cinv_gname)]} **
-          [| o_owner = Some th |] **
-          MutexTokens.token_not_full γ.(lock_state_gname).(LockState.token_gname)
-      else
-        P **
-        (** The physical owner is cleared before [do_unlock]; the ghost owner
-            records the last acquiring thread until the next acquisition. *)
-        this ,, _field "MyMutex::m_owner" |-> thread_idR 1$m None **
-        LockState.owner_tid_frag γ.(lock_state_gname) o_owner **
-        MutexTokens.token_full γ.(lock_state_gname).(LockState.token_gname)).
-
-    Definition IR (γ : gname) (q : cQp.t) (P : mpred) : Rep :=
-      structR N q$m **
-      as_Rep (fun this =>
-        cinv lock_namespace γ.(cinv_gname) (mutex_inv this γ P) **
-        cinv_own γ.(cinv_gname) q
-      ).
-    Hint Opaque IR : sl_opacity typeclass_instances.
-    #[only(type_ptr,cfractional,ascfractional,cfracvalid)] derive IR.
-
+  (* thread::id operations and yield() are not proved for now. *)
+  Section unproved_specs.
+    Context `{Σ : cpp_logic, σ : genv, HAS_THREADS : !HasStdThreads Σ}.
     Context `{MOD : source ⊧ σ}.
-
-    Abbreviation GLOBALS q :=
-      (_global "std::memory_order_seq_cst" |->
-        primR "enum std::memory_order" q
-          (memory_order.to_val memory_order.seq_cst)).
 
     cpp.spec (default_ctor "std::thread::id") as thread_id_ctor_spec with (
       \this this
@@ -133,56 +83,110 @@ Module custom_mutex.
       \post{result}[Vptr result]
         result |-> thread_idR 1$m (Some thr)).
 
-    cpp.spec "MyMutex::MyMutex()" as ctor_spec with (
-      \this this
-      \pre{P} ▷P
-      \require WeaklyObjective P
-      \post (|={⊤}=> Exists g,
-        this |-> IR g 1$m P ** LockState.token g.(lock_state_gname) 1%Qp)).
+    cpp.spec "std::this_thread::yield()" as yield_spec with (
+      \post emp).
+  End unproved_specs.
 
-    cpp.spec "MyMutex::~MyMutex()" as dtor_spec with (
-      \this this
-      \pre{g P} this |-> IR g 1$m P ** LockState.token g.(lock_state_gname) 1%Qp
-      \post P).
+  Record gname : Set := MkGname
+  { lock_state_gname : LockState.gname
+  ; cinv_gname : iprop.gname
+  }.
 
-    cpp.spec "MyMutex::do_lock()" as do_lock_spec with (
-      \this this
-      \prepost{g q P} this |-> IR g q P
-      \persist{thr} current_thread thr
-      \pre LockState.not_locked g.(lock_state_gname) thr q g.(cinv_gname)
-      \prepost{q'} GLOBALS q'
-      (* does not have to be q, but easier if it is *)
-      \post (P **
-            this ,, _field "MyMutex::m_owner" |-> thread_idR 1$m None **
-            LockState.locked g.(lock_state_gname) (Some thr) q)).
+  Definition lock_namespace : namespace := nroot .@@ "MyMutex".
 
-    cpp.spec "MyMutex::do_unlock()" as do_unlock_spec with (
-      \this this
-      \prepost{g q P} this |-> IR g q P
-      \persist{thr} current_thread thr
-      \pre ▷P
-      \pre this ,, _field "MyMutex::m_owner" |-> thread_idR 1$m None
-      \pre LockState.locked g.(lock_state_gname) (Some thr) q
-      \post LockState.not_locked g.(lock_state_gname) thr q g.(cinv_gname)).
+  sl.lock
+  Definition lockedR `{Σ : cpp_logic} `{!LockState.G Σ} `{σ : genv}
+      (γ: gname) (thr : thread_idT) (q : cQp.t) : Rep :=
+    _field "MyMutex::m_owner" |-> thread_idR 1$m (Some thr) ** pureR (LockState.locked γ.(lock_state_gname) (Some thr) q%Qp).
+  #[global] Hint Opaque lockedR : sl_opacity typeclass_instances.
+  #[only(timeless, exclusive)] derive lockedR.
 
+  Section with_Σ.
+    Context `{Σ : cpp_logic, σ : genv, HAS_THREADS : !HasStdThreads Σ,
+      !LockState.G Σ}.
+
+    (** The invariant holds the thread's mutex set while the spinlock is held.
+        Its token balance supports both full and partial ownership transfers. *)
+    Definition mutex_inv (this : ptr) (γ : gname) (P : mpred) : mpred :=
+      ∃ b : bool,
+      this ,, _field "MyMutex::m_lock" |->
+        atomic.R "int" 1$m (if b then 1 else 0)%Z **
+      ∃ o_owner : option thread_idT,
+      LockState.owner_tid_auth γ.(lock_state_gname) o_owner **
+      (if b then
+        ∃ th,
+          MutexSets.my_mutexes
+            γ.(lock_state_gname).(LockState.pool_namespace)
+            γ.(lock_state_gname).(LockState.pool_gname) th {[γ.(cinv_gname)]} **
+          [| o_owner = Some th |] **
+          MutexTokens.token_not_full γ.(lock_state_gname).(LockState.token_gname)
+      else
+        P **
+        (** The physical owner is cleared before [do_unlock]; the ghost owner
+            records the last acquiring thread until the next acquisition. *)
+        this ,, _field "MyMutex::m_owner" |-> thread_idR 1$m None **
+        LockState.owner_tid_frag γ.(lock_state_gname) o_owner **
+        MutexTokens.token_full γ.(lock_state_gname).(LockState.token_gname)).
+
+    Definition IR (γ : gname) (q : cQp.t) (P : mpred) : Rep :=
+      structR N q$m **
+      as_Rep (fun this =>
+        cinv lock_namespace γ.(cinv_gname) (mutex_inv this γ P) **
+        cinv_own γ.(cinv_gname) q
+      ).
+    Hint Opaque IR : sl_opacity typeclass_instances.
+    #[only(type_ptr,cfractional,ascfractional,cfracvalid)] derive IR.
+
+    Context `{MOD : source ⊧ σ}.
+
+    Abbreviation GLOBALS q :=
+      (_global "std::memory_order_seq_cst" |->
+        primR "enum std::memory_order" q
+          (memory_order.to_val memory_order.seq_cst)).
+
+    Abbreviation token := (fun g q => LockState.token g.(lock_state_gname) q).
+
+    cpp.spec "MyMutex::MyMutex()" as ctor_spec with
+      (\exact Reduce (Spec.ctor_spec IR lock_state_gname)).
+
+    cpp.spec "MyMutex::~MyMutex()" as dtor_spec with
+      (\exact Reduce (Spec.dtor_spec IR lock_state_gname)).
+
+    (** Keep the representation fraction in the state, since this implementation
+        uses the same fraction for [IR] and the locking tokens. *)
     Definition T : Type := gname * cQp.t * mpred.
+    Abbreviation mutexR := (fun (gq : gname * cQp.t) (_ : cQp.t) P =>
+      IR gq.1 gq.2 P).
+    (* the raw assertions are used for the internal do_lock() and do_unlock() *)
+    Abbreviation not_locked_raw :=
+      (fun (_ : ptr) (gq : gname * cQp.t) thr (_ : unit) =>
+        LockState.not_locked gq.1.(lock_state_gname) thr gq.2 gq.1.(cinv_gname)).
+    Abbreviation locked_raw :=
+      (fun (this : ptr) (gq : gname * cQp.t) thr (_ : unit) =>
+        (this |-> lockedR gq.1 thr gq.2)%I).
 
-    Definition do_lock (this : ptr) (lk : T) (K : mpred) : mpred :=
-      let g := lk.1.1 in
-      let q := lk.1.2 in
-      let P := lk.2 in
-      ∃ thr q', current_thread thr **
-        LockState.not_locked g.(lock_state_gname) thr q g.(cinv_gname) **
-        GLOBALS q' **
-        (GLOBALS q' ** P ** this |-> locked g thr q -* K).
+    (** Locking additionally preserves the globals used by the spin loop. *)
+    Abbreviation not_locked := (fun this gq thr q' =>
+      (not_locked_raw this gq thr tt ** GLOBALS q')%I).
+    Abbreviation locked := (fun this gq thr q' =>
+      (GLOBALS q' ** locked_raw this gq thr tt)%I).
+
+    Abbreviation raw_locked_raw :=
+      (fun (this : ptr) (gq : gname * cQp.t) thr (_ : unit) =>
+        (this ,, _field "MyMutex::m_owner" |-> thread_idR 1$m None **
+         LockState.locked gq.1.(lock_state_gname) (Some thr) gq.2)%I).
+    Abbreviation raw_locked := (fun this gq thr q' =>
+      (GLOBALS q' ** raw_locked_raw this gq thr tt)%I).
+
+    cpp.spec "MyMutex::do_lock()" as do_lock_spec with
+      (\exact Reduce (Spec.lock_spec_alt mutexR not_locked raw_locked)).
+
+    cpp.spec "MyMutex::do_unlock()" as do_unlock_spec with
+      (\exact Reduce (Spec.unlock_spec_alt mutexR not_locked_raw raw_locked_raw)).
+
+    Definition do_lock := Spec.do_lock not_locked locked.
     #[global] Arguments do_lock /.
-
-    Definition do_unlock (this : ptr) (lk : T) (K : mpred) : mpred :=
-      let g := lk.1.1 in
-      let q := lk.1.2 in
-      let P := lk.2 in
-      ∃ thr , current_thread thr ** this |-> locked g thr q ** ▷P **
-        (LockState.not_locked g.(lock_state_gname) thr q g.(cinv_gname) -* K).
+    Definition do_unlock := Spec.do_unlock not_locked_raw locked_raw.
     #[global] Arguments do_unlock /.
 
     #[global] Instance custom_mutex_basic_lockable :
@@ -191,20 +195,11 @@ Module custom_mutex.
       { do_lock := do_lock
       ; do_unlock := do_unlock }.
 
-    cpp.spec "MyMutex::lock()" as lock_spec_alt with (
-      \this this
-      \prepost{g q P} this |-> IR g q P
-      \persist{thr} current_thread thr
-      \pre LockState.not_locked g.(lock_state_gname) thr q g.(cinv_gname)
-      \prepost{q'} GLOBALS q'
-      \post P ** this |-> locked g thr q).
+    cpp.spec "MyMutex::lock()" as lock_spec_alt with
+      (\exact Reduce (Spec.lock_spec_alt mutexR not_locked locked)).
 
-    cpp.spec "MyMutex::unlock()" as unlock_spec_alt with (
-      \this this
-      \prepost{g q P} this |-> IR g q P
-      \persist{thr} current_thread thr
-      \pre this |-> locked g thr q ** ▷P
-      \post LockState.not_locked g.(lock_state_gname) thr q g.(cinv_gname)).
+    cpp.spec "MyMutex::unlock()" as unlock_spec_alt with
+      (\exact Reduce (Spec.unlock_spec_alt mutexR not_locked_raw locked_raw)).
 
     cpp.spec "MyMutex::lock()" as lock_spec with
       (\exact Reduce
@@ -213,35 +208,6 @@ Module custom_mutex.
     cpp.spec "MyMutex::unlock()" as unlock_spec with
       (\exact Reduce
         (unlock_basic_lockable (Tnamed N) (fun q gqP => IR gqP.1.1 gqP.1.2 gqP.2))).
-
-    Lemma lock_spec_entails_lock_spec_alt : lock_spec -|- lock_spec_alt.
-    Proof.
-      iSplit; iApply specify_mono; ework with br_erefl.
-      lazymatch goal with
-      | |- environments.envs_entails _ ?Ggoal =>
-        lazymatch Ggoal with
-        | context[IR ?gqP.1.1 ?gqP.1.2 ?gqP.2] => unify gqP (g, q, P)
-        end
-      end.
-      ework with br_erefl.
-      Unshelve. all: exact (1$m)%cQp.
-    Qed.
-
-    Lemma unlock_spec_entails_unlock_spec_alt : unlock_spec -|- unlock_spec_alt.
-    Proof.
-      iSplit; iApply specify_mono; ework with br_erefl.
-      lazymatch goal with
-      | |- environments.envs_entails _ ?Ggoal =>
-        lazymatch Ggoal with
-        | context[IR ?gqP.1.1 ?gqP.1.2 ?gqP.2] => unify gqP (g, q, P)
-        end
-      end.
-      ework with br_erefl.
-      Unshelve. all: exact (1$m)%cQp.
-    Qed.
-
-    cpp.spec "std::this_thread::yield()" as yield_spec with (
-      \post emp).
 
     Abbreviation BASE p := (p ,, _base "std::atomic<int>" "std::__atomic_base<int>").
 
@@ -384,7 +350,7 @@ Module custom_mutex.
     Qed.
     Hint Resolve do_load_C : sl_opacity.
 
-    Hint Opaque locked : sl_opacity.
+    Hint Opaque lockedR : sl_opacity.
 
     Lemma mymutex_do_lock_proof : verify[source] "MyMutex::do_lock()".
     Proof using MOD HAS_THREADS.
@@ -401,15 +367,17 @@ Module custom_mutex.
     Lemma mymutex_lock_alt_proof : verify[source] lock_spec_alt.
     Proof using MOD HAS_THREADS.
       verify_spec; ego.
-      rewrite locked.unlock.
+      rewrite lockedR.unlock.
       ego.
+      Unshelve. all: first [exact (1$m)%cQp | exact tt].
     Qed.
 
     Lemma mymutex_unlock_alt_proof : verify[source] unlock_spec_alt.
     Proof using MOD HAS_THREADS.
       verify_spec.
-      rewrite locked.unlock.
+      rewrite lockedR.unlock.
       repeat (go; ework).
+      Unshelve. all: first [exact (1$m)%cQp | exact tt].
     Qed.
 
     Lemma mymutex_ctor_proof : verify[source] "MyMutex::MyMutex()".
@@ -460,16 +428,17 @@ Module custom_mutex.
 
     Lemma mymutex_lock_proof : verify[source] lock_spec.
     Proof using MOD HAS_THREADS.
-      rewrite lock_spec_entails_lock_spec_alt.
+      have -> : lock_spec ⊣⊢ lock_spec_alt.
+      { apply (Spec.lock_spec_entails_lock_spec_alt mutexR not_locked locked). done. }
       exact mymutex_lock_alt_proof.
     Qed.
 
     Lemma mymutex_unlock_proof : verify[source] unlock_spec.
     Proof using MOD HAS_THREADS.
-      rewrite unlock_spec_entails_unlock_spec_alt.
+      have -> : unlock_spec ⊣⊢ unlock_spec_alt.
+      { apply (Spec.unlock_spec_entails_unlock_spec_alt mutexR not_locked_raw locked_raw). done. }
       exact mymutex_unlock_alt_proof.
     Qed.
-
 
   End with_Σ.
 End custom_mutex.

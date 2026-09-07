@@ -24,7 +24,7 @@ Section with_cpp.
   Proof.
     verify_spec.
     go.
-    iExists (mutex.locked g (Some thr) qt ** P), qt.
+    iExists (mutex.locked mp g thr qt ** P), qt.
     go with br_erefl.
     by rewrite (left_id_L 1%Qp Qp.mul).
   Qed.
@@ -34,7 +34,7 @@ Section with_cpp.
     verify_spec.
     rewrite !R.unlock.
     go.
-    iExists (mutex.not_locked g thr qt), qt.
+    iExists (mutex.not_locked mp g thr qt), qt.
     go with br_erefl.
     by rewrite (left_id_L 1%Qp Qp.mul).
   Qed.

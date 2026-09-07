@@ -89,20 +89,20 @@ Section with_cpp.
     \arg{mp} "m" (Vptr mp)
     \persist{thr} current_thread thr
     \pre{g q qt P} mp |-> mutex.R g q$m P
-    \pre mutex.not_locked g thr qt
+    \pre mutex.not_locked mp g thr qt
     \post
       this |-> R (mp, g, q, qt) 1$m P **
-      P ** mutex.locked g (Some thr) qt
+      P ** mutex.locked mp g thr qt
     ).
 
   cpp.spec "std::lock_guard<std::mutex>::~lock_guard()" as dtor_spec from source with (
     \this this
     \pre{mp g q qt P} this |-> R (mp, g, q, qt) 1$m P
     \persist{thr} current_thread thr
-    \pre mutex.locked g (Some thr) qt
+    \pre mutex.locked mp g thr qt
     \pre ▷P
     \post
-      mutex.not_locked g thr qt **
+      mutex.not_locked mp g thr qt **
       mp |-> mutex.R g q$m P
   ).
 
