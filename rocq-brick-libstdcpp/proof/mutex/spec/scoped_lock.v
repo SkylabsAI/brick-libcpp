@@ -29,14 +29,14 @@ Module scoped_lock.
         \persist{thr} current_thread thr
         \arg{mp1} "" (Vptr mp1)
         \pre{g1 q1 qt1 P1} mp1 |-> mutex.R g1 q1$m P1
-        \pre mutex.not_locked g1 thr qt1
+        \pre mutex.not_locked mp1 g1 thr qt1
         \arg{mp2} "" (Vptr mp2)
         \pre{g2 q2 qt2 P2} mp2 |-> mutex.R g2 q2$m P2
-        \pre mutex.not_locked g2 thr qt2
+        \pre mutex.not_locked mp2 g2 thr qt2
         \post
           this |-> R 1$m [ (mp1, g1, q1, qt1, P1); (mp2, g2, q2, qt2, P2)] **
-          P1 ** mutex.locked g1 (Some thr) qt1 **
-          P2 ** mutex.locked g2 (Some thr) qt2
+          P1 ** mutex.locked mp1 g1 thr qt1 **
+          P2 ** mutex.locked mp2 g2 thr qt2
       ).
 
       cpp.spec "std::scoped_lock<...<std::mutex, std::mutex>>::~scoped_lock()"
@@ -51,11 +51,11 @@ Module scoped_lock.
           this |-> R 1$m [ (mp1, g1, q1, qt1, P1); (mp2, g2, q2, qt2, P2)]
         \pre |> P1
         \pre |> P2
-        \pre mutex.locked g1 (Some thr) qt1
-        \pre mutex.locked g2 (Some thr) qt2
+        \pre mutex.locked mp1 g1 thr qt1
+        \pre mutex.locked mp2 g2 thr qt2
         \post
-          mp1 |-> mutex.R g1 q1$m P1 ** mutex.not_locked g1 thr qt1 **
-          mp2 |-> mutex.R g2 q2$m P2 ** mutex.not_locked g2 thr qt2
+          mp1 |-> mutex.R g1 q1$m P1 ** mutex.not_locked mp1 g1 thr qt1 **
+          mp2 |-> mutex.R g2 q2$m P2 ** mutex.not_locked mp2 g2 thr qt2
       ).
     End with_threads.
   End with_cpp.
