@@ -218,7 +218,11 @@ Module istream.
             end
         ).
 
-    (** TODO: this specification is unsound because it needs to re-buffer the
+    (** This contract only covers parsed values representable as [int].
+        Out-of-range extraction saturates and sets [failbit], which the current
+        stream predicate does not model.
+
+        TODO: this specification is unsound because it needs to re-buffer the
         next character that it read (the first component of the pair returned by
         [read_int]).
      *)
@@ -228,7 +232,9 @@ Module istream.
           \pre{IS isM} this |-> istream.R IS isM 1$m
           \arg{nP} "" (Vref nP)
           \pre nP |-> anyR "int" 1$m
-          \pre{K : Z -> mpred} interp_itree as_event IS read_int (K ∘ snd)
+          \pre{K : Z -> mpred} interp_itree as_event IS read_int (fun '(_, n) =>
+            [| (int_rank.min_val int_rank.Iint Signed <= n <=
+                int_rank.max_val int_rank.Iint Signed)%Z |] ** K n)
           \post[Vptr this] Exists isM' n,
             this |-> istream.R IS isM' 1$m **
               nP |-> intR 1$m n **
