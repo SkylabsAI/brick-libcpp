@@ -22,10 +22,9 @@ Module CustomMutexState (Sets0 : MUTEX_SETS) (Tokens0 : MUTEX_TOKENS)
     token_gname : iprop.gname;
     owner_gname : iprop.gname;
   }.
-  Definition gname : Set := mutex_gname * cQp.t.
-  Definition Q : Type := cQp.t.
-  Definition pool_name (γ : gname) : iprop.gname := γ.1.(pool_gname).
-  Definition inv_name (γ : gname) : iprop.gname := γ.1.(invariant_gname).
+  Definition gname : Set := mutex_gname.
+  Definition pool_name (γ : gname) : iprop.gname := γ.(pool_gname).
+  Definition inv_name (γ : gname) : iprop.gname := γ.(invariant_gname).
 
   Class stateG `{Σ : cpp_logic} := {
     #[global] sets_G :: Sets0.G Σ;
@@ -38,10 +37,10 @@ Module CustomMutexState (Sets0 : MUTEX_SETS) (Tokens0 : MUTEX_TOKENS)
   #[global] Instance state_G `{Σ : cpp_logic} (H : G Σ) : @stateG _ _ Σ := H.
 
   Definition token `{Σ : cpp_logic, !G Σ}
-      (γ : gname) (q : Qp) : mpred :=
-    Tokens0.token γ.1.(token_gname) q.
+      (γ : gname) (q : cQp.t) : mpred :=
+    Tokens0.token γ.(token_gname) q.
 
-  Definition lock_permit `{Σ : cpp_logic, !G Σ}
+  Definition not_locked_ghost `{Σ : cpp_logic, !G Σ}
       (γ : mutex_gname) (th : thread_idT) (q : Qp) : mpred :=
     Sets0.mutex_set_frag γ.(pool_gname) th (GSet {[γ.(invariant_gname)]}) **
     Tokens0.token γ.(token_gname) q.
@@ -52,8 +51,11 @@ Module CustomMutexState (Sets0 : MUTEX_SETS) (Tokens0 : MUTEX_TOKENS)
     Owners0.owner_tid_frag γ.(owner_gname) (Some th).
 
   #[global] Instance token_fractional
-      `{Σ : cpp_logic, !G Σ} γ : Fractional (token γ).
-  Proof. rewrite /token. apply Tokens0.token_fractional. Qed.
+      `{Σ : cpp_logic, !G Σ} γ : CFractional (token γ).
+  Proof.
+    intros q1 q2. rewrite /token cQp.frac_add.
+    apply Tokens0.token_fractional.
+  Qed.
 
   #[global] Instance token_timeless
       `{Σ : cpp_logic, !G Σ} γ q : Timeless (token γ q).
@@ -94,7 +96,7 @@ Module CustomMutexState (Sets0 : MUTEX_SETS) (Tokens0 : MUTEX_TOKENS)
 
     Lemma alloc (γpool : iprop.gname) inv_gname :
       ⊢ |==> ∃ γ, [| γ.(pool_gname) = γpool |] ** [| γ.(invariant_gname) = inv_gname |] **
-        token (γ, (1$m)%cQp) 1 ** state γ false.
+        token γ 1$m ** state γ false.
     Proof.
       iMod Tokens0.alloc as (gt) "[T GT]".
       iMod (Owners0.alloc None) as (go) "[OA OF]".
@@ -106,10 +108,10 @@ Module CustomMutexState (Sets0 : MUTEX_SETS) (Tokens0 : MUTEX_TOKENS)
     Qed.
 
     Lemma do_lock γ th q :
-      state γ false ** lock_permit γ th q |--
+      state γ false ** not_locked_ghost γ th q |--
         (|==> state γ true ** owner_token γ th q).
     Proof.
-      rewrite /state /lock_permit /owner_token.
+      rewrite /state /not_locked_ghost /owner_token.
       iIntros "[State [Sets T]]".
       iDestruct "State" as (owner) "(OA & OF & Balance)".
       iDestruct (Tokens0.acquire with "[$Balance $T]") as "[GT Balance]".
@@ -120,9 +122,9 @@ Module CustomMutexState (Sets0 : MUTEX_SETS) (Tokens0 : MUTEX_TOKENS)
 
     Lemma do_unlock γ th q :
       state γ true ** owner_token γ th q |--
-        (|==> state γ false ** lock_permit γ th q).
+        (|==> state γ false ** not_locked_ghost γ th q).
     Proof.
-      rewrite /state /owner_token /lock_permit.
+      rewrite /state /owner_token /not_locked_ghost.
       iIntros "[State [GT OF]]".
       iDestruct "State" as (owner) "(OA & Sets & Balance)".
       iDestruct (observe_2 [| Some owner = Some th |] with "OA OF") as %Heq.
@@ -140,7 +142,7 @@ Module CustomMutexState (Sets0 : MUTEX_SETS) (Tokens0 : MUTEX_TOKENS)
     Qed.
 
     Lemma locked_full_token γ :
-      state γ true ** token (γ, (1$m)%cQp) 1 |-- False.
+      state γ true ** token γ 1$m |-- False.
     Proof.
       rewrite /state /token. iIntros "[State T]".
       iDestruct "State" as (th) "(_ & _ & Balance)".
@@ -148,7 +150,7 @@ Module CustomMutexState (Sets0 : MUTEX_SETS) (Tokens0 : MUTEX_TOKENS)
     Qed.
   End state_laws.
 
-  #[global] Hint Opaque token lock_permit owner_token state : sl_opacity typeclass_instances.
+  #[global] Hint Opaque token not_locked_ghost owner_token state : sl_opacity typeclass_instances.
 
   Parameter thread_idR : ∀ `{Σ : cpp_logic, σ : genv}, cQp.t ->
     (* None if value is thread::id(), Some otherwise *)
@@ -166,17 +168,17 @@ Module CustomMutexState (Sets0 : MUTEX_SETS) (Tokens0 : MUTEX_TOKENS)
         (memory_order.to_val memory_order.seq_cst).
 
   Definition not_locked `{Σ : cpp_logic, !G Σ} {σ : genv}
-      (this : ptr) (γ : gname) (th : thread_idT) (q : Q) : mpred :=
-    lock_permit γ.1 th γ.2 ** globals q.
+      (this : ptr) (γ : gname) (th : thread_idT) (q : cQp.t) : mpred :=
+    not_locked_ghost γ th q ** globals q.
   #[global] Arguments not_locked /.
   #[global] Arguments globals /.
 
   (** Public ownership includes the physical owner written by [lock]. *)
   Definition locked `{Σ : cpp_logic, !G Σ} {σ : genv}
-      (this : ptr) (γ : gname) (th : thread_idT) (q : Q) : mpred :=
+      (this : ptr) (γ : gname) (th : thread_idT) (q : cQp.t) : mpred :=
     globals q **
       (this ,, _field "MyMutex::m_owner" |-> thread_idR 1$m (Some th) **
-        owner_token γ.1 th γ.2).
+        owner_token γ th q).
   #[global] Arguments locked /.
   #[global] Instance locked_timeless `{Σ : cpp_logic, !G Σ} {σ : genv}
       this γ th q : Timeless (locked this γ th q).
@@ -260,7 +262,7 @@ Module custom_mutex.
   End unproved_specs.
 
   Definition gname : Set := State.mutex_gname.
-  Definition lock_state_gname (γ : gname) : State.gname := (γ, (1$m)%cQp).
+  Definition lock_state_gname (γ : gname) : State.gname := γ.
   Definition cinv_gname : gname -> iprop.gname := State.invariant_gname.
 
   Definition lock_namespace : namespace := nroot .@@ "MyMutex".
@@ -295,62 +297,56 @@ Module custom_mutex.
         primR "enum std::memory_order" q
           (memory_order.to_val memory_order.seq_cst)).
 
-    Abbreviation token := (fun g q => State.token (g, (1$m)%cQp) q).
-
     cpp.spec "MyMutex::MyMutex()" as ctor_spec with
       (\exact Reduce (Spec.ctor_spec IR lock_state_gname)).
 
     cpp.spec "MyMutex::~MyMutex()" as dtor_spec with
       (\exact Reduce (Spec.dtor_spec IR lock_state_gname)).
 
-    (** Keep the representation fraction in the state, since this implementation
-        uses the same fraction for [IR] and the locking tokens. *)
-    Definition T : Type := gname * cQp.t * mpred.
-    Abbreviation mutexR := (fun (gq : gname * cQp.t) (_ : cQp.t) P =>
-      IR gq.1 gq.2 P).
+    Definition T : Type := gname * mpred.
     cpp.spec "MyMutex::do_lock()" as do_lock_spec with (
       \this this
       \prepost{g q P} this |-> IR g q P
       \persist{thr} current_thread thr
-      \pre{qg} State.lock_permit g thr q ** GLOBALS qg
-      \post P ** GLOBALS qg **
+      \pre{(qt : cQp.t)} State.not_locked_ghost g thr qt ** GLOBALS qt
+      \post P ** GLOBALS qt **
         this ,, _field "MyMutex::m_owner" |-> thread_idR 1$m None **
-        State.owner_token g thr q).
+        State.owner_token g thr qt).
 
     cpp.spec "MyMutex::do_unlock()" as do_unlock_spec with (
       \this this
       \prepost{g q P} this |-> IR g q P
       \persist{thr} current_thread thr
-      \pre{qg} GLOBALS qg **
+      \pre{qt} GLOBALS qt **
         this ,, _field "MyMutex::m_owner" |-> thread_idR 1$m None **
-        State.owner_token g thr q
+        State.owner_token g thr qt
       \pre ▷P
-      \post State.lock_permit g thr q ** GLOBALS qg).
+      \post State.not_locked_ghost g thr qt ** GLOBALS qt).
 
-    Definition do_lock := Spec.do_lock (fun g => g).
+    Definition do_lock := Spec.do_lock lock_state_gname.
     #[global] Arguments do_lock /.
-    Definition do_unlock := Spec.do_unlock (fun g => g).
+    Definition do_unlock := Spec.do_unlock lock_state_gname.
     #[global] Arguments do_unlock /.
 
     #[global] Instance custom_mutex_basic_lockable :
         BasicLockable (T := T) (Tnamed N)
-          (fun _ gqP => IR gqP.1.1 gqP.1.2 gqP.2) :=
+          (fun q gP => IR gP.1 q gP.2) :=
       { do_lock := do_lock
       ; do_unlock := do_unlock }.
 
     cpp.spec "MyMutex::lock()" as lock_spec_alt with
-      (\exact Reduce (Spec.lock_spec_alt mutexR (fun g => g))).
+      (\exact Reduce (Spec.lock_spec_alt IR lock_state_gname)).
 
     cpp.spec "MyMutex::unlock()" as unlock_spec_alt with
-      (\exact Reduce (Spec.unlock_spec_alt mutexR (fun g => g))).
+      (\exact Reduce (Spec.unlock_spec_alt IR lock_state_gname)).
 
     cpp.spec "MyMutex::lock()" as lock_spec with
       (\exact Reduce
-        (lock_basic_lockable (Tnamed N) (fun q gqP => IR gqP.1.1 gqP.1.2 gqP.2))).
+        (lock_basic_lockable (Tnamed N) (fun q gP => IR gP.1 q gP.2))).
 
     cpp.spec "MyMutex::unlock()" as unlock_spec with
       (\exact Reduce
-        (unlock_basic_lockable (Tnamed N) (fun q gqP => IR gqP.1.1 gqP.1.2 gqP.2))).
+        (unlock_basic_lockable (Tnamed N) (fun q gP => IR gP.1 q gP.2))).
 
     Abbreviation BASE p := (p ,, _base "std::atomic<int>" "std::__atomic_base<int>").
 
@@ -366,13 +362,13 @@ Module custom_mutex.
       \using denoteModule source
       \using{thr} current_thread thr
       \consuming{g q P} p |-> IR g q P
-      \consuming State.lock_permit g thr q
+      \consuming{qt} State.not_locked_ghost g thr qt
       \proving{K (_ : IsExistential K)}
       std.atomic.do_exchange "int" (BASE (p,, o_field σ "MyMutex::m_lock") ) 1%Z K
       \instantiate K := (fun res => p |-> IR g q P ** [| res = 0 \/ res = 1 |]%Z **
-                          if bool_decide (res = 0) then P ** State.owner_token g thr q **
+                          if bool_decide (res = 0) then P ** State.owner_token g thr qt **
                             p ,, _field "MyMutex::m_owner" |-> thread_idR 1$m None
-                          else State.lock_permit g thr q)
+                          else State.not_locked_ghost g thr qt)
                           \end@{mpredI}.
     Next Obligation.
       intros. iIntros "[#M Hpre]" (?? ->).
@@ -424,10 +420,10 @@ Module custom_mutex.
       \consuming{g q P} p |-> IR g q P
       \consuming P
       \consuming p ,, _field "MyMutex::m_owner" |-> thread_idR 1$m None
-      \consuming State.owner_token g thr q
+      \consuming{qt} State.owner_token g thr qt
       \proving{K (_ : IsExistential K)}
         std.atomic.do_store "int" (BASE (p ,, o_field σ "MyMutex::m_lock")) 0%Z K
-      \instantiate K := (p |-> IR g q P ** State.lock_permit g thr q)
+      \instantiate K := (p |-> IR g q P ** State.not_locked_ghost g thr qt)
       \end@{mpredI}.
     Next Obligation.
       intros. iIntros "[#M Hpre]" (?? ->).
@@ -548,14 +544,14 @@ Module custom_mutex.
     Lemma mymutex_lock_proof : verify[source] lock_spec.
     Proof using MOD HAS_THREADS.
       have -> : lock_spec ⊣⊢ lock_spec_alt.
-      { apply (Spec.lock_spec_entails_lock_spec_alt mutexR (fun g => g)). done. }
+      { apply (Spec.lock_spec_entails_lock_spec_alt IR lock_state_gname). done. }
       exact mymutex_lock_alt_proof.
     Qed.
 
     Lemma mymutex_unlock_proof : verify[source] unlock_spec.
     Proof using MOD HAS_THREADS.
       have -> : unlock_spec ⊣⊢ unlock_spec_alt.
-      { apply (Spec.unlock_spec_entails_unlock_spec_alt mutexR (fun g => g)). done. }
+      { apply (Spec.unlock_spec_entails_unlock_spec_alt IR lock_state_gname). done. }
       exact mymutex_unlock_alt_proof.
     Qed.
 
