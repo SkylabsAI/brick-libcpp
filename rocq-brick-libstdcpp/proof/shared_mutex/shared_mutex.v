@@ -10,12 +10,10 @@ Require Export skylabs.brick.libstdcpp.runtime.pred.
 Require Import skylabs.brick.libstdcpp.shared_mutex.inc_hpp.
 Require Import skylabs.brick.libstdcpp.mutex.requirements.
 Require Import skylabs.brick.libstdcpp.lib.lock_ghost.
+Require Import skylabs.brick.libstdcpp.lib.tactics.
 
 Import linearity.
 Import lock_ghost.
-
-(* TODO UPSTREAM. *)
-#[global] Instance SplitRecord_prod A B : SplitRecord (@prod A B) := {}.
 
 Module shared_mutex.
 Section with_cpp.

@@ -24,7 +24,6 @@ Module CustomMutexState (Sets0 : MUTEX_SETS) (Tokens0 : MUTEX_TOKENS)
   }.
   Definition gname : Set := mutex_gname.
   Definition pool_name (γ : gname) : iprop.gname := γ.(pool_gname).
-  Definition inv_name (γ : gname) : iprop.gname := γ.(invariant_gname).
 
   Class stateG `{Σ : cpp_logic} := {
     #[global] sets_G :: Sets0.G Σ;
@@ -66,10 +65,10 @@ Module CustomMutexState (Sets0 : MUTEX_SETS) (Tokens0 : MUTEX_TOKENS)
   Proof. rewrite /owner_token. apply _. Qed.
 
   #[global] Instance owner_token_exclusive
-      `{Σ : cpp_logic, !G Σ} γ q : Exclusive1 (fun th => owner_token γ th q).
+      `{Σ : cpp_logic, !G Σ} γ : Exclusive2 (owner_token γ).
   Proof.
-    intros th1 th2. rewrite /owner_token.
-    apply _.
+    intros th1 th2 q1 q2. rewrite /owner_token.
+    apply observe_2_sep_r. apply _.
   Qed.
 
   (** While held, the invariant owns this thread's singleton mutex fragment
@@ -184,9 +183,9 @@ Module CustomMutexState (Sets0 : MUTEX_SETS) (Tokens0 : MUTEX_TOKENS)
       this γ th q : Timeless (locked this γ th q).
   Proof. rewrite /locked /globals. apply _. Qed.
   #[global] Instance locked_exclusive `{Σ : cpp_logic, !G Σ} {σ : genv}
-      this γ q : Exclusive1 (fun th => locked this γ th q).
+      this γ : Exclusive2 (locked this γ).
   Proof.
-    intros th1 th2. rewrite /locked.
+    intros th1 th2 q1 q2. rewrite /locked.
     apply observe_2_sep_r. apply observe_2_sep_r. apply _.
   Qed.
 
@@ -292,11 +291,6 @@ Module custom_mutex.
 
     Context `{MOD : source ⊧ σ}.
 
-    Abbreviation GLOBALS q :=
-      (_global "std::memory_order_seq_cst" |->
-        primR "enum std::memory_order" q
-          (memory_order.to_val memory_order.seq_cst)).
-
     cpp.spec "MyMutex::MyMutex()" as ctor_spec with
       (\exact Reduce (Spec.ctor_spec IR lock_state_gname)).
 
@@ -308,8 +302,8 @@ Module custom_mutex.
       \this this
       \prepost{g q P} this |-> IR g q P
       \persist{thr} current_thread thr
-      \pre{(qt : cQp.t)} State.not_locked_ghost g thr qt ** GLOBALS qt
-      \post P ** GLOBALS qt **
+      \pre{(qt : cQp.t)} State.not_locked_ghost g thr qt ** State.globals qt
+      \post P ** State.globals qt **
         this ,, _field "MyMutex::m_owner" |-> thread_idR 1$m None **
         State.owner_token g thr qt).
 
@@ -317,11 +311,11 @@ Module custom_mutex.
       \this this
       \prepost{g q P} this |-> IR g q P
       \persist{thr} current_thread thr
-      \pre{qt} GLOBALS qt **
+      \pre{qt} State.globals qt **
         this ,, _field "MyMutex::m_owner" |-> thread_idR 1$m None **
         State.owner_token g thr qt
       \pre ▷P
-      \post State.not_locked_ghost g thr qt ** GLOBALS qt).
+      \post State.not_locked_ghost g thr qt ** State.globals qt).
 
     Definition do_lock := Spec.do_lock lock_state_gname.
     #[global] Arguments do_lock /.
@@ -352,9 +346,7 @@ Module custom_mutex.
 
     Definition bi_later_exist_F := [FWD] @bi.later_exist.
     Definition bi_later_sep_F := [FWD] @bi.later_sep.
-    Definition bi_later_sep_B := [BWD->] @bi.later_sep.
     Hint Resolve bi_later_exist_F bi_later_sep_F : br_hints.
-    Import linearity.
 
     #[program]
     Definition do_exchange_C (p : ptr) :=
@@ -544,14 +536,14 @@ Module custom_mutex.
     Lemma mymutex_lock_proof : verify[source] lock_spec.
     Proof using MOD HAS_THREADS.
       have -> : lock_spec ⊣⊢ lock_spec_alt.
-      { apply (Spec.lock_spec_entails_lock_spec_alt IR lock_state_gname). done. }
+      { apply (Spec.lock_spec_equiv_lock_spec_alt IR lock_state_gname). done. }
       exact mymutex_lock_alt_proof.
     Qed.
 
     Lemma mymutex_unlock_proof : verify[source] unlock_spec.
     Proof using MOD HAS_THREADS.
       have -> : unlock_spec ⊣⊢ unlock_spec_alt.
-      { apply (Spec.unlock_spec_entails_unlock_spec_alt IR lock_state_gname). done. }
+      { apply (Spec.unlock_spec_equiv_unlock_spec_alt IR lock_state_gname). done. }
       exact mymutex_unlock_alt_proof.
     Qed.
 
