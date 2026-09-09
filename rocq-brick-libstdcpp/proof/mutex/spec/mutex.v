@@ -224,6 +224,7 @@ Module StdMutex (Preds : MUTEX_PREDS).
     #[global] Declare Instance R_learnable : forall {HAS_THREADS : HasStdThreads Σ} {σ : genv},
         Cbn (Learn (learn_eq ==> any ==> learn_eq ==> learn_hints.fin) R).
 
+    (* FIXME can we delete this? *)
     Section with_RepFor.
       Import rep.RepFor.
       Import RepScheme.
