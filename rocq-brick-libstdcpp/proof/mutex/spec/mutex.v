@@ -38,6 +38,13 @@ Module Type MUTEX_PREDS.
       `{Σ : cpp_logic, !G Σ} γ : CFractional (token γ).
   #[global] Declare Instance token_timeless
       `{Σ : cpp_logic, !G Σ} γ q : Timeless (token γ q).
+  #[global] Declare Instance not_locked_timeless
+      `{Σ : cpp_logic, !G Σ} {σ : genv} this γ th q :
+    Timeless (not_locked this γ th q).
+  (** Each thread has at most one handle to attempt locking this mutex. *)
+  #[global] Declare Instance not_locked_exclusive
+      `{Σ : cpp_logic, !G Σ} {σ : genv} this γ th :
+    Exclusive1 (not_locked this γ th).
   #[global] Declare Instance locked_timeless
       `{Σ : cpp_logic, !G Σ} {σ : genv} this γ th q :
     Timeless (locked this γ th q).
