@@ -172,6 +172,17 @@ Module CustomMutexState (Sets0 : MUTEX_SETS) (Tokens0 : MUTEX_TOKENS)
   #[global] Arguments not_locked /.
   #[global] Arguments globals /.
 
+  #[global] Instance not_locked_timeless `{Σ : cpp_logic, !G Σ} {σ : genv}
+      this γ th q : Timeless (not_locked this γ th q).
+  Proof. rewrite /not_locked /not_locked_ghost /globals. apply _. Qed.
+  #[global] Instance not_locked_exclusive `{Σ : cpp_logic, !G Σ} {σ : genv}
+      this γ th : Exclusive1 (not_locked this γ th).
+  Proof.
+    intros q1 q2. rewrite /not_locked /not_locked_ghost.
+    iIntros "[[F1 _] _] [[F2 _] _]".
+    iDestruct (Sets0.mutex_set_frag_exclusive with "[$F1 $F2]") as %[].
+  Qed.
+
   (** Public ownership includes the physical owner written by [lock]. *)
   Definition locked `{Σ : cpp_logic, !G Σ} {σ : genv}
       (this : ptr) (γ : gname) (th : thread_idT) (q : cQp.t) : mpred :=
