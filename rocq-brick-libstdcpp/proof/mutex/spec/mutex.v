@@ -20,8 +20,8 @@ Import linearity.
   and `locked`. The exact model depends on the implementation. *)
 Module Type MUTEX_PREDS.
   Parameter gname : Set.
-  (* FIXME do we need these? *)
-  Parameter pool_name inv_name : gname -> iprop.gname.
+  (** Mutex-set pool agreed before mutex creation. *)
+  Parameter pool_name : gname -> iprop.gname.
 
   Parameter G : forall `{Σ : cpp_logic}, Type.
   Existing Class G.
@@ -42,11 +42,11 @@ Module Type MUTEX_PREDS.
       `{Σ : cpp_logic, !G Σ} {σ : genv} this γ th q :
     Timeless (locked this γ th q).
   #[global] Declare Instance locked_exclusive
-      `{Σ : cpp_logic, !G Σ} {σ : genv} this γ q :
-    Exclusive1 (fun th => locked this γ th q).
+      `{Σ : cpp_logic, !G Σ} {σ : genv} this γ :
+    Exclusive2 (locked this γ).
 End MUTEX_PREDS.
 
-(* TODO UPSTREAM. *)
+(* TODO UPSTREAM. FIXME what does this do? *)
 #[global] Instance SplitRecord_prod A B : SplitRecord (@prod A B) := {}.
 
 Module mutex_spec (Preds : MUTEX_PREDS).
@@ -127,7 +127,7 @@ Section with_cpp.
       iSplit; iApply specify_mono; intros this xs K; rewrite Heq; done.
     Qed.
 
-    Lemma lock_spec_entails_lock_spec_alt
+    Lemma lock_spec_equiv_lock_spec_alt
         (Hlock : requirements.do_lock (Tnamed class_name) = do_lock) :
       spec_type_void_to_ret "void"
         (lock_basic_lockable (Tnamed class_name) (fun q gp => R gp.1 q gp.2)) ⊣⊢
@@ -146,7 +146,7 @@ Section with_cpp.
         iIntros "[HL HP]". iFrame.
     Qed.
 
-    Lemma unlock_spec_entails_unlock_spec_alt
+    Lemma unlock_spec_equiv_unlock_spec_alt
         (Hunlock : requirements.do_unlock (Tnamed class_name) = do_unlock) :
       spec_type_void_to_ret "void" (unlock_basic_lockable (Tnamed class_name) (fun q gp => R gp.1 q gp.2)) ⊣⊢
       spec_type_void_to_ret "void" unlock_spec_alt.
@@ -166,7 +166,7 @@ Section with_cpp.
 
     Context {L : Lockable (Tnamed class_name) (fun q gp => R gp.1 q gp.2)}.
 
-    Lemma try_lock_spec_entails_try_lock_spec_alt
+    Lemma try_lock_spec_equiv_try_lock_spec_alt
         (Htry_lock : requirements.do_try_lock (Tnamed class_name) = do_try_lock) :
       spec_type_void_to_ret "bool" (try_lock_lockable (Tnamed class_name) (fun q gp => R gp.1 q gp.2)) ⊣⊢
       spec_type_void_to_ret "bool" try_lock_spec_alt.
@@ -197,7 +197,6 @@ Module StdMutex (Preds : MUTEX_PREDS).
 
   Definition gname := Preds.gname.
   Definition lock_state_gname (g : gname) := g.
-  Abbreviation cinv_gname := Preds.inv_name.
 
   Definition G := @Preds.G.
   Existing Class G.
@@ -280,21 +279,21 @@ Module StdMutex (Preds : MUTEX_PREDS).
     cpp.spec "std::mutex::try_lock()" as try_lock_spec with
       (\exact Reduce (try_lock_lockable "std::mutex" (λ q γP, R γP.1 q γP.2))).
 
-    Lemma lock_spec_entails_lock_spec_alt : lock_spec -|- lock_spec_alt.
+    Lemma lock_spec_equiv_lock_spec_alt : lock_spec -|- lock_spec_alt.
     Proof.
-      apply (Spec.lock_spec_entails_lock_spec_alt R lock_state_gname).
+      apply (Spec.lock_spec_equiv_lock_spec_alt R lock_state_gname).
       reflexivity.
     Qed.
 
-    Lemma unlock_spec_entails_unlock_spec_alt : unlock_spec -|- unlock_spec_alt.
+    Lemma unlock_spec_equiv_unlock_spec_alt : unlock_spec -|- unlock_spec_alt.
     Proof.
-      apply (Spec.unlock_spec_entails_unlock_spec_alt R lock_state_gname).
+      apply (Spec.unlock_spec_equiv_unlock_spec_alt R lock_state_gname).
       reflexivity.
     Qed.
 
-    Lemma try_lock_spec_entails_try_lock_spec_alt : try_lock_spec -|- try_lock_spec_alt.
+    Lemma try_lock_spec_equiv_try_lock_spec_alt : try_lock_spec -|- try_lock_spec_alt.
     Proof.
-      apply (Spec.try_lock_spec_entails_try_lock_spec_alt R lock_state_gname).
+      apply (Spec.try_lock_spec_equiv_try_lock_spec_alt R lock_state_gname).
       reflexivity.
     Qed.
   End with_cpp.
