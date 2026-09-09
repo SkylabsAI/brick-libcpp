@@ -11,6 +11,18 @@ Require Export skylabs.brick.libstdcpp.runtime.pred.
 
 Import linearity.
 
+(**  Ghost state and laws for mutex specs and proofs. *)
+
+(** MUTEX_SETS has 2 parts: `mutex_set_map g (T:get thread_idT)` for registering
+  new threads and allocating their `my_mutexes g th` with
+  `mutex_sets_alloc_thread`, which is a pair of  `mutex_set_auth` and
+  `mutex_set_frag` of gnames.
+  The thread keeps auth and trades a fraction `mutex_set_frag {[ginv]}` to
+  `inv ginv P` for resources so it only gets resources once from the invariant
+  until it gives resources back  (`mutex_set_frag_exclusive`).
+  If `ginv` is not allcated yet, it can be allocated with
+  `my_mutexes_alloc_mutex_name`.
+*)
 Module Type MUTEX_SETS.
   Parameter cmraR : cmra.
 
@@ -21,9 +33,6 @@ Module Type MUTEX_SETS.
   }.
   #[global] Arguments G {_ _} Σ : assert.
 
-  (** All predicates use the same ghost name [γ], with [th] selecting an
-      entry. [mutex_set_map γ T] retains the authorities for thread IDs
-      outside the allocated set [T]. *)
   Parameter mutex_set_map : forall `{Σ : cpp_logic, !G Σ},
     iprop.gname -> gset thread_idT -> mpred.
   Parameter mutex_set_frag : forall `{Σ : cpp_logic, !G Σ},
@@ -69,8 +78,10 @@ Module Type MUTEX_SETS.
       (|==> my_mutexes γ th (GSet (sa ∪ {[γm]})) sf **
               mutex_set_frag γ th (GSet {[γm]})).
 
-  (** Distinct threads can own arbitrary, possibly overlapping mutex sets.
-      The registry and both authoritative sets are retained as the remainder. *)
+  (** This is more of a sanity check. Maybe there are better rules that should 
+      be included in the module instead of this.
+      Distinct threads can allocate, possibly overlapping gname sets.
+      Frags are given to the lock invariants while auth are held by threads. *)
   Parameter mutex_set_frags_alloc : forall `{Σ : cpp_logic, !G Σ}
       (th1 th2 : thread_idT) (s1 s2 : gset iprop.gname),
     th1 ≠ th2 ->
@@ -126,62 +137,72 @@ Module Type MUTEX_TOKENS.
     ⊢ |==> ∃ γ, token γ 1 ** given_token γ 1.
 End MUTEX_TOKENS.
 
+(** Authoritative and exclusive fragment ownership of an optional thread ID. *)
+Module Type OWNER_TID.
+  Parameter cmraR : cmra.
+
+  Class G `{Σ : cpp_logic} := {
+    #[local] has_own :: HasOwn (iPropI _Σ) cmraR;
+    #[local] has_upd :: HasOwnUpd (iPropI _Σ) cmraR;
+    #[local] has_valid :: HasOwnValid (iPropI _Σ) cmraR;
+  }.
+  #[global] Arguments G {_ _} Σ : assert.
+
+  Parameter owner_tid_auth owner_tid_frag : forall `{Σ : cpp_logic, !G Σ},
+    iprop.gname -> option thread_idT -> mpred.
+
+  #[global] Declare Instance owner_tid_auth_timeless
+      `{Σ : cpp_logic, !G Σ} γ o : Timeless (owner_tid_auth γ o).
+  #[global] Declare Instance owner_tid_frag_timeless
+      `{Σ : cpp_logic, !G Σ} γ o : Timeless (owner_tid_frag γ o).
+  #[global] Declare Instance owner_tid_frag_exclusive
+      `{Σ : cpp_logic, !G Σ} γ : Exclusive1 (owner_tid_frag γ).
+  #[global] Declare Instance owner_tid_auth_WeaklyObjective
+      `{Σ : cpp_logic, !G Σ} γ o : WeaklyObjective (owner_tid_auth γ o).
+  #[global] Declare Instance owner_tid_frag_WeaklyObjective
+      `{Σ : cpp_logic, !G Σ} γ o : WeaklyObjective (owner_tid_frag γ o).
+  #[global] Declare Instance owner_agree
+      `{Σ : cpp_logic, !G Σ} γ o1 o2 :
+    Observe2 [| o1 = o2 |] (owner_tid_auth γ o1) (owner_tid_frag γ o2).
+
+  Parameter alloc : forall `{Σ : cpp_logic, !G Σ} o,
+    ⊢ |==> ∃ γ, owner_tid_auth γ o ** owner_tid_frag γ o.
+  Parameter owner_update : forall `{Σ : cpp_logic, !G Σ} γ oa ofrag o',
+    owner_tid_auth γ oa ** owner_tid_frag γ ofrag |--
+      (|==> owner_tid_auth γ o' ** owner_tid_frag γ o').
+End OWNER_TID.
+
+(** A MUTEX_STATE says a mutex spec is parametrized by some `token`, `not_locked`
+  and `locked`. The exact model depends on the implementation. *)
 Module Type MUTEX_STATE.
   Parameter gname : Set.
-  Parameter (pool_name : gname -> iprop.gname).
+  Parameter Q : Type.
+  (* FIXME do we need these? *)
+  Parameter pool_name inv_name : gname -> iprop.gname.
 
   Parameter G : forall `{Σ : cpp_logic}, Type.
   Existing Class G.
   #[global] Arguments G {_ _} Σ : assert.
 
-  (** Client resources. [not_locked] permits this thread to attempt acquisition;
-      [locked] records ownership after successful acquisition. *)
+  (** [Q] describes the permissions transferred by lock and unlock. *)
   Parameter token : forall `{Σ : cpp_logic, !G Σ},
     gname -> Qp -> mpred.
-  Parameter not_locked : forall `{Σ : cpp_logic, !G Σ},
-    gname -> thread_idT -> Qp -> iprop.gname -> mpred.
-  Parameter locked : forall `{Σ : cpp_logic, !G Σ},
-    gname -> option thread_idT -> Qp -> mpred.
-
-  (** The ghost resources kept inside the mutex invariant. The boolean agrees
-      with the physical lock bit; the invariant name connects acquisitions to
-      the same mutex. Its representation is private to the implementation. *)
-  Parameter state : forall `{Σ : cpp_logic, !G Σ},
-    gname -> iprop.gname -> bool -> mpred.
-  #[global] Declare Instance state_WeaklyObjective
-      `{Σ : cpp_logic, !G Σ} γ inv_gname b :
-    WeaklyObjective (state γ inv_gname b).
+  Parameter not_locked locked : forall `{Σ : cpp_logic, !G Σ} {σ : genv},
+    ptr -> gname -> thread_idT -> Q -> mpred.
 
   #[global] Declare Instance token_fractional
       `{Σ : cpp_logic, !G Σ} γ : Fractional (token γ).
   #[global] Declare Instance token_timeless
       `{Σ : cpp_logic, !G Σ} γ q : Timeless (token γ q).
   #[global] Declare Instance locked_timeless
-      `{Σ : cpp_logic, !G Σ} γ th q : Timeless (locked γ th q).
+      `{Σ : cpp_logic, !G Σ} {σ : genv} this γ th q :
+    Timeless (locked this γ th q).
   #[global] Declare Instance locked_exclusive
-      `{Σ : cpp_logic, !G Σ} γ q : Exclusive1 (fun th => locked γ th q).
-
-  (** Each mutex uses the caller's shared mutex-set pool. *)
-  Parameter alloc : forall `{Σ : cpp_logic, !G Σ} (γpool : iprop.gname) inv_gname,
-    ⊢ |==> ∃ γ, [| pool_name γ = γpool |] **
-      token γ 1 ** state γ inv_gname false.
-
-  (** Successful acquisition and release exchange client resources with the
-      invariant. Failed acquisition leaves both resources unchanged. *)
-  Parameter do_lock : forall `{Σ : cpp_logic, !G Σ} γ inv_gname th q,
-    state γ inv_gname false ** not_locked γ th q inv_gname |--
-      (|==> state γ inv_gname true ** locked γ (Some th) q).
-  Parameter do_unlock : forall `{Σ : cpp_logic, !G Σ} γ inv_gname th q,
-    state γ inv_gname true ** locked γ (Some th) q |--
-      (|==> state γ inv_gname false ** not_locked γ th q inv_gname).
-
-  (** Ownership rules out an unlocked physical state. Full destruction
-      permission rules out a locked physical state. *)
-  Parameter unlocked_locked : forall `{Σ : cpp_logic, !G Σ} γ inv_gname th q,
-    state γ inv_gname false ** locked γ th q |-- False.
-  Parameter locked_full_token : forall `{Σ : cpp_logic, !G Σ} γ inv_gname,
-    state γ inv_gname true ** token γ 1 |-- False.
+      `{Σ : cpp_logic, !G Σ} {σ : genv} this γ q :
+    Exclusive1 (fun th => locked this γ th q).
 End MUTEX_STATE.
+
+(* Proofs that the ghost state modules are inhabited. *)
 
 Module MutexSets : MUTEX_SETS.
   Canonical Structure threadR := authUR (gset_disjR iprop.gname).
@@ -353,7 +374,7 @@ End MutexSets.
 
 (** ** The fractional token/given-token pair *)
 
-Module MutexTokens.
+Module MutexTokens <: MUTEX_TOKENS.
   Canonical Structure cmraR : cmra :=
     prodUR (optionUR fracR) (optionUR fracR).
 
@@ -521,70 +542,45 @@ Module MutexTokens.
   End theory.
 End MutexTokens.
 
-(** The concrete state abstracts over mutex sets and tokens, and implements
-    optional owner state directly. *)
-Module MakeMutexState
-    (Sets0 : MUTEX_SETS)
-    (Tokens0 : MUTEX_TOKENS) <: MUTEX_STATE.
-  Module Sets := Sets0.
-  Module Tokens := Tokens0.
+(** The exclusive-authoritative implementation of [OWNER_TID]. *)
+Module OwnerTid : OWNER_TID.
+  Canonical Structure cmraR : cmra := excl_authR (optionO thread_idTO).
 
-  #[local] Existing Instance Tokens.token_fractional.
-  #[local] Existing Instance Tokens.given_token_fractional.
-  #[local] Existing Instance Tokens.token_timeless.
-  #[local] Existing Instance Tokens.given_token_timeless.
-
-  Canonical Structure owner_cmraR : cmra :=
-    excl_authR (optionO thread_idTO).
-
-  Record mutex_gname : Set := MkGname {
-    pool_gname : iprop.gname;
-    token_gname : iprop.gname;
-    owner_gname : iprop.gname;
+  Class G `{Σ : cpp_logic} := {
+    #[local] has_own :: HasOwn (iPropI _Σ) cmraR;
+    #[local] has_upd :: HasOwnUpd (iPropI _Σ) cmraR;
+    #[local] has_valid :: HasOwnValid (iPropI _Σ) cmraR;
   }.
-  Definition gname : Set := mutex_gname.
-  Definition pool_name (γ : gname) : iprop.gname := γ.(pool_gname).
-
-  Class stateG `{Σ : cpp_logic} := {
-    #[global] sets_G :: Sets.G Σ;
-    #[global] tokens_G :: Tokens.G Σ;
-    #[global] has_owner :: HasOwn (iPropI _Σ) owner_cmraR;
-    #[global] has_owner_upd :: HasOwnUpd (iPropI _Σ) owner_cmraR;
-    #[global] has_owner_valid :: HasOwnValid (iPropI _Σ) owner_cmraR;
-  }.
-  Definition G := @stateG.
-  Existing Class G.
   #[global] Arguments G {_ _} Σ : assert.
-  #[global] Instance state_G `{Σ : cpp_logic} (H : G Σ) : @stateG _ _ Σ := H.
 
   Definition owner_tid_auth `{Σ : cpp_logic, !G Σ}
-      (γ : gname) (o_thr : option thread_idT) : mpred :=
-    own γ.(owner_gname) ((●E o_thr) : owner_cmraR).
-
+      (γ : iprop.gname) (o : option thread_idT) : mpred :=
+    own γ ((●E o) : cmraR).
   Definition owner_tid_frag `{Σ : cpp_logic, !G Σ}
-      (γ : gname) (o_thr : option thread_idT) : mpred :=
-    own γ.(owner_gname) ((◯E o_thr) : owner_cmraR).
+      (γ : iprop.gname) (o : option thread_idT) : mpred :=
+    own γ ((◯E o) : cmraR).
 
-  #[global] Hint Opaque owner_tid_auth owner_tid_frag : sl_opacity typeclass_instances.
-
-  #[only(timeless)] derive owner_tid_auth.
-  #[only(timeless)] derive owner_tid_frag.
+  #[global] Instance owner_tid_auth_timeless
+      `{Σ : cpp_logic, !G Σ} γ o : Timeless (owner_tid_auth γ o).
+  Proof. rewrite /owner_tid_auth. apply _. Qed.
+  #[global] Instance owner_tid_frag_timeless
+      `{Σ : cpp_logic, !G Σ} γ o : Timeless (owner_tid_frag γ o).
+  Proof. rewrite /owner_tid_frag. apply _. Qed.
 
   #[global] Instance owner_tid_frag_exclusive
       `{Σ : cpp_logic, !G Σ} γ : Exclusive1 (owner_tid_frag γ).
   Proof.
-    intros o_thr1 o_thr2. rewrite /owner_tid_frag.
+    intros o1 o2. rewrite /owner_tid_frag.
     iIntros "H1 H2".
     iDestruct (own_valid_2 with "H1 H2") as %Hvalid.
     move: Hvalid. rewrite excl_auth_frag_op_valid. done.
   Qed.
 
-  #[global] Instance owner_tid_auth_WeaklyObjective `{Σ : cpp_logic, !G Σ} γ o_thr :
-    WeaklyObjective (owner_tid_auth γ o_thr).
+  #[global] Instance owner_tid_auth_WeaklyObjective
+      `{Σ : cpp_logic, !G Σ} γ o : WeaklyObjective (owner_tid_auth γ o).
   Proof. rewrite /owner_tid_auth. apply _. Qed.
-
-  #[global] Instance owner_tid_frag_WeaklyObjective `{Σ : cpp_logic, !G Σ} γ o_thr :
-    WeaklyObjective (owner_tid_frag γ o_thr).
+  #[global] Instance owner_tid_frag_WeaklyObjective
+      `{Σ : cpp_logic, !G Σ} γ o : WeaklyObjective (owner_tid_frag γ o).
   Proof. rewrite /owner_tid_frag. apply _. Qed.
 
   #[global] Instance owner_agree `{Σ : cpp_logic, !G Σ} γ o1 o2 :
@@ -594,6 +590,15 @@ Module MakeMutexState
     rewrite /owner_tid_auth /owner_tid_frag. iIntros "A F".
     iDestruct (own_valid_2 with "A F") as %HV.
     iPureIntro. apply leibniz_equiv, excl_auth_agree, HV.
+  Qed.
+
+  Lemma alloc `{Σ : cpp_logic, !G Σ} o :
+    ⊢ |==> ∃ γ, owner_tid_auth γ o ** owner_tid_frag γ o.
+  Proof.
+    iMod (own_alloc ((●E o ⋅ ◯E o) : cmraR)) as (γ) "H".
+    { apply excl_auth_valid. }
+    iModIntro. iExists γ.
+    rewrite /owner_tid_auth /owner_tid_frag -own_op. iExact "H".
   Qed.
 
   Lemma owner_update `{Σ : cpp_logic, !G Σ} γ oa ofrag o' :
@@ -606,132 +611,5 @@ Module MakeMutexState
     done.
   Qed.
 
-  Definition token `{Σ : cpp_logic, !G Σ}
-      (γ : gname) (q : Qp) : mpred :=
-    Tokens.token γ.(token_gname) q.
-
-  Definition not_locked `{Σ : cpp_logic, !G Σ}
-      (γ : gname) (th : thread_idT) (q : Qp)
-      (inv_gname : iprop.gname) : mpred :=
-    Sets.mutex_set_frag γ.(pool_gname) th (GSet {[inv_gname]}) **
-    Tokens.token γ.(token_gname) q.
-
-  Definition locked `{Σ : cpp_logic, !G Σ}
-      (γ : gname) (o_thr : option thread_idT) (q : Qp) : mpred :=
-    Tokens.given_token γ.(token_gname) q **
-    owner_tid_frag γ o_thr.
-
-  Lemma not_locked_eq `{Σ : cpp_logic, !G Σ} γ th q inv_gname :
-    not_locked γ th q inv_gname ⊣⊢
-      Sets.mutex_set_frag γ.(pool_gname) th (GSet {[inv_gname]}) **
-      Tokens.token γ.(token_gname) q.
-  Proof. done. Qed.
-
-  Lemma locked_eq `{Σ : cpp_logic, !G Σ} γ o_thr q :
-    locked γ o_thr q ⊣⊢
-      Tokens.given_token γ.(token_gname) q **
-      owner_tid_frag γ o_thr.
-  Proof. done. Qed.
-
-  #[global] Instance token_fractional
-      `{Σ : cpp_logic, !G Σ} γ : Fractional (token γ).
-  Proof. rewrite /token. apply Tokens.token_fractional. Qed.
-
-  #[global] Instance token_timeless
-      `{Σ : cpp_logic, !G Σ} γ q : Timeless (token γ q).
-  Proof. rewrite /token. apply _. Qed.
-
-  #[global] Instance locked_timeless
-      `{Σ : cpp_logic, !G Σ} γ th q : Timeless (locked γ th q).
-  Proof. rewrite /locked. apply _. Qed.
-
-  #[global] Instance locked_exclusive
-      `{Σ : cpp_logic, !G Σ} γ q : Exclusive1 (fun th => locked γ th q).
-  Proof.
-    intros th1 th2. rewrite /locked.
-    apply _.
-  Qed.
-
-  (** While held, the invariant owns this thread's singleton mutex fragment
-      and the token balance. The thread retains its mutex-set authority.
-      When free, both halves of the previous owner remain in the invariant. *)
-  Definition state `{Σ : cpp_logic, !G Σ}
-      (γ : gname) (inv_gname : iprop.gname) (b : bool) : mpred :=
-    (if b then
-      ∃ th, owner_tid_auth γ (Some th) **
-        Sets.mutex_set_frag γ.(pool_gname) th (GSet {[inv_gname]}) **
-        Tokens.token_not_full γ.(token_gname)
-    else
-      ∃ owner, owner_tid_auth γ owner ** owner_tid_frag γ owner **
-        Tokens.token_full γ.(token_gname))%I.
-
-  #[global] Instance state_WeaklyObjective
-      `{Σ : cpp_logic, !G Σ} γ inv_gname b :
-    WeaklyObjective (state γ inv_gname b).
-  Proof. rewrite /state. destruct b; apply _. Qed.
-
-  Section state_laws.
-    Context `{Σ : cpp_logic, !G Σ}.
-
-    Lemma alloc (γpool : iprop.gname) inv_gname :
-      ⊢ |==> ∃ γ, [| pool_name γ = γpool |] **
-        token γ 1 ** state γ inv_gname false.
-    Proof.
-      iMod Tokens.alloc as (gt) "[T GT]".
-      iMod (own_alloc ((●E None ⋅ ◯E None) : owner_cmraR)) as (go) "O".
-      { apply excl_auth_valid. }
-      iDestruct (own_op with "O") as "[OA OF]".
-      iModIntro. iExists (MkGname γpool gt go).
-      iSplit; first done.
-      rewrite /token /state /=. iFrame "T". iExists None.
-      rewrite /owner_tid_auth /owner_tid_frag /=. iFrame "OA OF".
-      iApply Tokens.token_full_init. iExact "GT".
-    Qed.
-
-    Lemma do_lock γ inv_gname th q :
-      state γ inv_gname false ** not_locked γ th q inv_gname |--
-        (|==> state γ inv_gname true ** locked γ (Some th) q).
-    Proof.
-      rewrite /state /not_locked /locked.
-      iIntros "[State [Sets T]]".
-      iDestruct "State" as (owner) "(OA & OF & Balance)".
-      iDestruct (Tokens.acquire with "[$Balance $T]") as "[GT Balance]".
-      iMod (owner_update _ _ _ (Some th) with "[$OA $OF]") as "[OA OF]".
-      iModIntro. iFrame "GT OF". iExists th. iFrame.
-    Qed.
-
-    Lemma do_unlock γ inv_gname th q :
-      state γ inv_gname true ** locked γ (Some th) q |--
-        (|==> state γ inv_gname false ** not_locked γ th q inv_gname).
-    Proof.
-      rewrite /state /locked /not_locked.
-      iIntros "[State [GT OF]]".
-      iDestruct "State" as (owner) "(OA & Sets & Balance)".
-      iDestruct (observe_2 [| Some owner = Some th |] with "OA OF") as %Heq.
-      injection Heq as ->.
-      iDestruct (Tokens.release with "[$Balance $GT]") as "[T Balance]".
-      iModIntro. iFrame "Sets T". iExists (Some th). iFrame.
-    Qed.
-
-    Lemma unlocked_locked γ inv_gname th q :
-      state γ inv_gname false ** locked γ th q |-- False.
-    Proof.
-      rewrite /state /locked. iIntros "[State [_ OF]]".
-      iDestruct "State" as (owner) "(_ & OF0 & _)".
-      iDestruct (owner_tid_frag_exclusive with "OF0 OF") as %[].
-    Qed.
-
-    Lemma locked_full_token γ inv_gname :
-      state γ inv_gname true ** token γ 1 |-- False.
-    Proof.
-      rewrite /state /token. iIntros "[State T]".
-      iDestruct "State" as (th) "(_ & _ & Balance)".
-      iApply (Tokens.token_not_full_full_token with "[$Balance $T]").
-    Qed.
-  End state_laws.
-
-  #[global] Hint Opaque token not_locked locked state : sl_opacity typeclass_instances.
-
-End MakeMutexState.
-
-Module LockState := MakeMutexState MutexSets MutexTokens.
+  #[global] Hint Opaque owner_tid_auth owner_tid_frag : sl_opacity typeclass_instances.
+End OwnerTid.
