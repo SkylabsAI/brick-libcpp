@@ -21,21 +21,19 @@ Import linearity.
 
 Module mutex_spec (State : lock_ghost2.MUTEX_STATE).
 Section with_cpp.
-  Context `{Σ : cpp_logic} {Name : Type}.
+  Context `{Σ : cpp_logic} {σ : genv} {Name : Type}.
   Context `{!State.G Σ}.
   Context (R : Name -> cQp.t -> mpred -> Rep).
   Context (state_name : Name -> State.gname).
-  Context {HAS_THREADS : HasStdThreads Σ} {Q : Type}.
-  (** FIXME is there a more modular way to provide not_locked, locked and ghost
-    names, e.g. make them parameters to the mutex_spec module?  *)
-  Context (not_locked locked : ptr -> Name -> thread_idT -> Q -> mpred).
+  Context {HAS_THREADS : HasStdThreads Σ}.
 
   (** The guarded predicate must be weakly objective for invariant allocation,
       which R likely has. *)
   Definition ctor_spec : ptr -> WpSpec mpred val val :=
     (\this this
-      \pre{P} ▷P ** [| WeaklyObjective P |]
-      \post |={⊤}=> Exists g, this |-> R g 1$m P ** State.token (state_name g) 1).
+      \pre{P γpool} ▷P ** [| WeaklyObjective P |]
+      \post |={⊤}=> Exists g, [| State.pool_name (state_name g) = γpool |] **
+              this |-> R g 1$m P ** State.token (state_name g) 1).
 
   Definition dtor_spec : ptr -> WpSpec mpred val val :=
     (\this this
@@ -46,47 +44,46 @@ Section with_cpp.
     (\this this
       \prepost{q P g} this |-> R g q P
       \persist{thr} current_thread thr
-      \pre{qt} not_locked this g thr qt
-      \post P ** locked this g thr qt).
+      \pre{qt} State.not_locked this (state_name g) thr qt
+      \post P ** State.locked this (state_name g) thr qt).
 
   Definition unlock_spec_alt : ptr -> WpSpec mpred val val :=
     (\this this
       \prepost{q P g} this |-> R g q P
       \persist{thr} current_thread thr
-      \pre{qt} locked this g thr qt
+      \pre{qt} State.locked this (state_name g) thr qt
       \pre ▷P
-      \post not_locked this g thr qt).
+      \post State.not_locked this (state_name g) thr qt).
 
   Definition try_lock_spec_alt : ptr -> WpSpec mpred val val :=
     (\this this
       \prepost{q P g} this |-> R g q P
       \persist{thr} current_thread thr
-      \pre{qt} not_locked this g thr qt
+      \pre{qt} State.not_locked this (state_name g) thr qt
       \post{b}[Vbool b]
-        if b then P ** locked this g thr qt else not_locked this g thr qt).
+        if b then P ** State.locked this (state_name g) thr qt
+        else State.not_locked this (state_name g) thr qt).
 
   (* TODO readd the later on the lock/unlock continuations. *)
   Definition do_lock (this : ptr) (lk : Name * mpred) (K : mpred) : mpred :=
-    ∃ thr qt, current_thread thr ** not_locked this lk.1 thr qt **
-      (locked this lk.1 thr qt ** lk.2 -* K).
+    ∃ thr qt, current_thread thr ** State.not_locked this (state_name lk.1) thr qt **
+      (State.locked this (state_name lk.1) thr qt ** lk.2 -* K).
   #[global] Arguments do_lock /.
 
   Definition do_unlock (this : ptr) (lk : Name * mpred) (K : mpred) : mpred :=
-    ∃ thr qt, current_thread thr ** locked this lk.1 thr qt ** ▷lk.2 **
-      (not_locked this lk.1 thr qt -* K).
+    ∃ thr qt, current_thread thr ** State.locked this (state_name lk.1) thr qt ** ▷lk.2 **
+      (State.not_locked this (state_name lk.1) thr qt -* K).
   #[global] Arguments do_unlock /.
 
   Definition do_try_lock (this : ptr) (lk : Name * mpred)
       (K : bool -> mpred) : mpred :=
-    ∃ thr qt, current_thread thr ** not_locked this lk.1 thr qt **
+    ∃ thr qt, current_thread thr ** State.not_locked this (state_name lk.1) thr qt **
       ∀ b : bool,
-        (if b then lk.2 ** locked this lk.1 thr qt
-          else not_locked this lk.1 thr qt) -* K b.
+        (if b then lk.2 ** State.locked this (state_name lk.1) thr qt
+          else State.not_locked this (state_name lk.1) thr qt) -* K b.
   #[global] Arguments do_try_lock /.
 
   Section equivalences.
-    Context {σ : genv}.
-    (* Context (not_locked locked : ptr -> Name -> thread_idT -> Q -> mpred). *)
     Context (method_name class_name : globname).
     Context {BL : BasicLockable (Tnamed class_name) (fun q gp => R gp.1 q gp.2)}.
 
@@ -113,7 +110,7 @@ Section with_cpp.
       - ework with br_erefl.
       - iIntros "H". iDestruct "H" as (q P g thr qt)
           "(%Hxs & HR & #HT & HNL & HK)".
-        iExists q, (g, P), (P ** locked this g thr qt)%I.
+        iExists q, (g, P), (P ** State.locked this (state_name g) thr qt)%I.
         iFrame "HR HK". iSplit; first done.
         iExists thr, qt. iFrame "HT HNL".
         iIntros "[HL HP]". iFrame.
@@ -131,7 +128,7 @@ Section with_cpp.
       - ework with br_erefl.
       - iIntros "H". iDestruct "H" as (q P g thr qt)
           "(%Hxs & HR & #HT & HL & HP & HK)".
-        iExists q, (g, P), (not_locked this g thr qt).
+        iExists q, (g, P), (State.not_locked this (state_name g) thr qt).
         iFrame "HR HK". iSplit; first done.
         iExists thr, qt. iFrame "HT HL HP".
         iIntros "$".
@@ -152,7 +149,8 @@ Section with_cpp.
       - iIntros "H". iDestruct "H" as (q P g thr qt)
           "(%Hxs & HR & #HT & HNL & HK)".
         iExists q, (g, P), (fun b : bool =>
-          if b then (P ** locked this g thr qt)%I else not_locked this g thr qt).
+          if b then (P ** State.locked this (state_name g) thr qt)%I
+          else State.not_locked this (state_name g) thr qt).
         iFrame "HR HK". iSplit; first done.
         iExists thr, qt. iFrame "HT HNL".
         iIntros (b) "$".
@@ -164,29 +162,28 @@ End mutex_spec.
 
 (** Specialize the reusable specs to the standard mutex representation and
     bind them to their C++ names. *)
-Module Mutex (State : lock_ghost2.MUTEX_STATE).
+Module StdMutex (State : lock_ghost2.MUTEX_STATE).
   Module Spec := mutex_spec State.
 
-  (** Pair the abstract state with the invariant named by [State.not_locked]. *)
-  Record gname : Set := MkGname {
-    lock_state_gname : State.gname;
-    cinv_gname : iprop.gname;
-  }.
+  Definition gname := State.gname.
+  Definition lock_state_gname (g : gname) := g.
+  Abbreviation cinv_gname := State.inv_name.
 
   Definition G := @State.G.
   Existing Class G.
   #[global] Arguments G {_ _} Σ : assert.
   #[global] Instance state_G `{Σ : cpp_logic} (H : G Σ) : State.G Σ := H.
 
-  Abbreviation token := (fun g q => State.token g.(lock_state_gname) q).
-  Abbreviation not_locked := (fun (_ : ptr) g th q => State.not_locked g.(lock_state_gname) th q g.(cinv_gname)).
-  Abbreviation locked := (fun (_ : ptr) g thr q => State.locked g.(lock_state_gname) (Some thr) q).
+  Abbreviation token := State.token.
+  Abbreviation not_locked := State.not_locked.
+  Abbreviation locked := State.locked.
 
 Section with_cpp.
   Context `{Σ : cpp_logic}.
 
   (** Fractional ownership of a <<std::mutex>> guarding the predicate <<P>>. *)
   Parameter R : forall {HAS_THREADS : HasStdThreads Σ} {σ : genv}, gname -> cQp.t -> mpred -> Rep.
+  #[global] Hint Opaque R : sl_opacity typeclass_instances.
   #[only(cfractional,cfracvalid,ascfractional,type_ptr="std::mutex")] derive R.
   #[global] Declare Instance R_learnable : forall {HAS_THREADS : HasStdThreads Σ} {σ : genv},
       Cbn (Learn (learn_eq ==> any ==> learn_eq ==> learn_hints.fin) R).
@@ -207,7 +204,7 @@ Section with_cpp.
   Context {HAS_THREADS : HasStdThreads Σ}.
 
   #[global] Instance locked_learn :
-      Cbn (Learn (req_eq ==> learn_eq ==> req_eq ==> learn_hints.fin) State.locked).
+      Cbn (Learn (req_eq ==> learn_eq ==> req_eq ==> req_eq ==> learn_hints.fin) locked).
   Proof. solve_learnable. Qed.
 
   cpp.spec "std::mutex::mutex()" as ctor_spec with
@@ -217,19 +214,19 @@ Section with_cpp.
     (\exact Reduce (Spec.dtor_spec R lock_state_gname)).
 
   cpp.spec "std::mutex::lock()" as lock_spec_alt with
-    (\exact Reduce (Spec.lock_spec_alt R not_locked locked)).
+    (\exact Reduce (Spec.lock_spec_alt R lock_state_gname)).
 
   cpp.spec "std::mutex::unlock()" as unlock_spec_alt with
-    (\exact Reduce (Spec.unlock_spec_alt R not_locked locked)).
+    (\exact Reduce (Spec.unlock_spec_alt R lock_state_gname)).
 
   cpp.spec "std::mutex::try_lock()" as try_lock_spec_alt with
-    (\exact Reduce (Spec.try_lock_spec_alt R not_locked locked)).
+    (\exact Reduce (Spec.try_lock_spec_alt R lock_state_gname)).
 
-  Definition do_lock := Spec.do_lock not_locked locked.
+  Definition do_lock := Spec.do_lock lock_state_gname.
   #[global] Arguments do_lock /.
-  Definition do_unlock := Spec.do_unlock not_locked locked.
+  Definition do_unlock := Spec.do_unlock lock_state_gname.
   #[global] Arguments do_unlock /.
-  Definition do_try_lock := Spec.do_try_lock not_locked locked.
+  Definition do_try_lock := Spec.do_try_lock lock_state_gname.
   #[global] Arguments do_try_lock /.
 
   (** <<std::mutex>> implements [BasicLockable] and [Lockable]. *)
@@ -255,22 +252,26 @@ Section with_cpp.
 
   Lemma lock_spec_entails_lock_spec_alt : lock_spec -|- lock_spec_alt.
   Proof.
-    apply (Spec.lock_spec_entails_lock_spec_alt R not_locked locked).
+    apply (Spec.lock_spec_entails_lock_spec_alt R lock_state_gname).
     reflexivity.
   Qed.
 
   Lemma unlock_spec_entails_unlock_spec_alt : unlock_spec -|- unlock_spec_alt.
   Proof.
-    apply (Spec.unlock_spec_entails_unlock_spec_alt R not_locked locked).
+    apply (Spec.unlock_spec_entails_unlock_spec_alt R lock_state_gname).
     reflexivity.
   Qed.
 
   Lemma try_lock_spec_entails_try_lock_spec_alt : try_lock_spec -|- try_lock_spec_alt.
   Proof.
-    apply (Spec.try_lock_spec_entails_try_lock_spec_alt R not_locked locked).
+    apply (Spec.try_lock_spec_entails_try_lock_spec_alt R lock_state_gname).
     reflexivity.
   Qed.
 End with_cpp.
-End Mutex.
+End StdMutex.
 
-Module mutex := Mutex lock_ghost2.LockState.
+(** The standard-library implementation remains abstract; concrete mutex
+    implementations instantiate [MUTEX_STATE] beside their proofs. *)
+Declare Module StdMutexState : lock_ghost2.MUTEX_STATE with Definition Q := Qp.
+Module StdMutexInst := StdMutex StdMutexState.
+Module mutex := StdMutexInst.
