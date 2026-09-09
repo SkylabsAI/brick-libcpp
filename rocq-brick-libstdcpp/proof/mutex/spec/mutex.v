@@ -20,7 +20,6 @@ Import linearity.
   and `locked`. The exact model depends on the implementation. *)
 Module Type MUTEX_PREDS.
   Parameter gname : Set.
-  Parameter Q : Type.
   (* FIXME do we need these? *)
   Parameter pool_name inv_name : gname -> iprop.gname.
 
@@ -28,14 +27,15 @@ Module Type MUTEX_PREDS.
   Existing Class G.
   #[global] Arguments G {_ _} Σ : assert.
 
-  (** [Q] describes the permissions transferred by lock and unlock. *)
+  (** [cQp.t] describes the permissions transferred by lock and unlock.
+      The permission might involve points-to, so use cQp.t instead of QP. *)
   Parameter token : forall `{Σ : cpp_logic, !G Σ},
-    gname -> Qp -> mpred.
+    gname -> cQp.t -> mpred.
   Parameter not_locked locked : forall `{Σ : cpp_logic, !G Σ} {σ : genv},
-    ptr -> gname -> thread_idT -> Q -> mpred.
+    ptr -> gname -> thread_idT -> cQp.t -> mpred.
 
   #[global] Declare Instance token_fractional
-      `{Σ : cpp_logic, !G Σ} γ : Fractional (token γ).
+      `{Σ : cpp_logic, !G Σ} γ : CFractional (token γ).
   #[global] Declare Instance token_timeless
       `{Σ : cpp_logic, !G Σ} γ q : Timeless (token γ q).
   #[global] Declare Instance locked_timeless
@@ -63,11 +63,11 @@ Section with_cpp.
     (\this this
       \pre{P γpool} ▷P ** [| WeaklyObjective P |]
       \post |={⊤}=> Exists g, [| Preds.pool_name (state_name g) = γpool |] **
-              this |-> R g 1$m P ** Preds.token (state_name g) 1).
+              this |-> R g 1$m P ** Preds.token (state_name g) 1$m).
 
   Definition dtor_spec : ptr -> WpSpec mpred val val :=
     (\this this
-      \pre{g P} this |-> R g 1$m P ** Preds.token (state_name g) 1
+      \pre{g P} this |-> R g 1$m P ** Preds.token (state_name g) 1$m
       \post P).
 
   Definition lock_spec_alt : ptr -> WpSpec mpred val val :=
@@ -208,100 +208,94 @@ Module StdMutex (Preds : MUTEX_PREDS).
   Abbreviation not_locked := Preds.not_locked.
   Abbreviation locked := Preds.locked.
 
-Section with_cpp.
-  Context `{Σ : cpp_logic}.
+  Section with_cpp.
+    Context `{Σ : cpp_logic}.
 
-  (** Fractional ownership of a <<std::mutex>> guarding the predicate <<P>>. *)
-  Parameter R : forall {HAS_THREADS : HasStdThreads Σ} {σ : genv}, gname -> cQp.t -> mpred -> Rep.
-  #[global] Hint Opaque R : sl_opacity typeclass_instances.
-  #[only(cfractional,cfracvalid,ascfractional,type_ptr="std::mutex")] derive R.
-  #[global] Declare Instance R_learnable : forall {HAS_THREADS : HasStdThreads Σ} {σ : genv},
-      Cbn (Learn (learn_eq ==> any ==> learn_eq ==> learn_hints.fin) R).
+    (** Fractional ownership of a <<std::mutex>> guarding the predicate <<P>>. *)
+    Parameter R : forall {HAS_THREADS : HasStdThreads Σ} {σ : genv}, gname -> cQp.t -> mpred -> Rep.
+    #[global] Hint Opaque R : sl_opacity typeclass_instances.
+    #[only(cfractional,cfracvalid,ascfractional,type_ptr="std::mutex")] derive R.
+    #[global] Declare Instance R_learnable : forall {HAS_THREADS : HasStdThreads Σ} {σ : genv},
+        Cbn (Learn (learn_eq ==> any ==> learn_eq ==> learn_hints.fin) R).
 
-  Section with_RepFor.
-    Import rep.RepFor.
-    Import RepScheme.
+    Section with_RepFor.
+      Import rep.RepFor.
+      Import RepScheme.
 
-    #[global] Instance repfor `{!HasStdThreads Σ} {σ : genv} :
-      rep.RepFor.C "std::mutex" [ArgType.Constant _; ArgType.CFrac; ArgType.Constant _]
-        (funI γ q P => R γ q P) := {}.
-  End with_RepFor.
+      #[global] Instance repfor `{!HasStdThreads Σ} {σ : genv} :
+        rep.RepFor.C "std::mutex" [ArgType.Constant _; ArgType.CFrac; ArgType.Constant _]
+          (funI γ q P => R γ q P) := {}.
+    End with_RepFor.
 
 
-  Context `{!G Σ}.
+    Context `{!G Σ}.
 
-  Context `{MOD : source ⊧ σ}.
-  Context {HAS_THREADS : HasStdThreads Σ}.
+    Context `{MOD : source ⊧ σ}.
+    Context {HAS_THREADS : HasStdThreads Σ}.
 
-  #[global] Instance locked_learn :
-      Cbn (Learn (req_eq ==> learn_eq ==> req_eq ==> req_eq ==> learn_hints.fin) locked).
-  Proof. solve_learnable. Qed.
+    #[global] Instance locked_learn :
+        Cbn (Learn (req_eq ==> learn_eq ==> req_eq ==> req_eq ==> learn_hints.fin) locked).
+    Proof. solve_learnable. Qed.
 
-  cpp.spec "std::mutex::mutex()" as ctor_spec with
-    (\exact Reduce (Spec.ctor_spec R lock_state_gname)).
+    cpp.spec "std::mutex::mutex()" as ctor_spec with
+      (\exact Reduce (Spec.ctor_spec R lock_state_gname)).
 
-  cpp.spec "std::mutex::~mutex()" as dtor_spec with
-    (\exact Reduce (Spec.dtor_spec R lock_state_gname)).
+    cpp.spec "std::mutex::~mutex()" as dtor_spec with
+      (\exact Reduce (Spec.dtor_spec R lock_state_gname)).
 
-  cpp.spec "std::mutex::lock()" as lock_spec_alt with
-    (\exact Reduce (Spec.lock_spec_alt R lock_state_gname)).
+    cpp.spec "std::mutex::lock()" as lock_spec_alt with
+      (\exact Reduce (Spec.lock_spec_alt R lock_state_gname)).
 
-  cpp.spec "std::mutex::unlock()" as unlock_spec_alt with
-    (\exact Reduce (Spec.unlock_spec_alt R lock_state_gname)).
+    cpp.spec "std::mutex::unlock()" as unlock_spec_alt with
+      (\exact Reduce (Spec.unlock_spec_alt R lock_state_gname)).
 
-  cpp.spec "std::mutex::try_lock()" as try_lock_spec_alt with
-    (\exact Reduce (Spec.try_lock_spec_alt R lock_state_gname)).
+    cpp.spec "std::mutex::try_lock()" as try_lock_spec_alt with
+      (\exact Reduce (Spec.try_lock_spec_alt R lock_state_gname)).
 
-  Definition do_lock := Spec.do_lock lock_state_gname.
-  #[global] Arguments do_lock /.
-  Definition do_unlock := Spec.do_unlock lock_state_gname.
-  #[global] Arguments do_unlock /.
-  Definition do_try_lock := Spec.do_try_lock lock_state_gname.
-  #[global] Arguments do_try_lock /.
+    Definition do_lock := Spec.do_lock lock_state_gname.
+    #[global] Arguments do_lock /.
+    Definition do_unlock := Spec.do_unlock lock_state_gname.
+    #[global] Arguments do_unlock /.
+    Definition do_try_lock := Spec.do_try_lock lock_state_gname.
+    #[global] Arguments do_try_lock /.
 
-  (** <<std::mutex>> implements [BasicLockable] and [Lockable]. *)
-  Definition T : Type := gname * mpred.
+    (** <<std::mutex>> implements [BasicLockable] and [Lockable]. *)
+    Definition T : Type := gname * mpred.
 
-  #[global] Instance mutex_basic_lockable :
-      BasicLockable (T:=T) "std::mutex" (λ q γP, R γP.1 q γP.2) :=
-    { do_lock := do_lock
-    ; do_unlock := do_unlock }.
+    #[global] Instance mutex_basic_lockable :
+        BasicLockable (T:=T) "std::mutex" (λ q γP, R γP.1 q γP.2) :=
+      { do_lock := do_lock
+      ; do_unlock := do_unlock }.
 
-  cpp.spec "std::mutex::lock()" as lock_spec with
-    (\exact Reduce (lock_basic_lockable "std::mutex" (λ q γP, R γP.1 q γP.2))).
+    cpp.spec "std::mutex::lock()" as lock_spec with
+      (\exact Reduce (lock_basic_lockable "std::mutex" (λ q γP, R γP.1 q γP.2))).
 
-  cpp.spec "std::mutex::unlock()" as unlock_spec with
-    (\exact Reduce (unlock_basic_lockable "std::mutex" (λ q γP, R γP.1 q γP.2))).
+    cpp.spec "std::mutex::unlock()" as unlock_spec with
+      (\exact Reduce (unlock_basic_lockable "std::mutex" (λ q γP, R γP.1 q γP.2))).
 
-  #[global] Instance mutex_lockable :
-      Lockable (T:=T) "std::mutex" (λ q γP, R γP.1 q γP.2) :=
-    { do_try_lock := do_try_lock }.
+    #[global] Instance mutex_lockable :
+        Lockable (T:=T) "std::mutex" (λ q γP, R γP.1 q γP.2) :=
+      { do_try_lock := do_try_lock }.
 
-  cpp.spec "std::mutex::try_lock()" as try_lock_spec with
-    (\exact Reduce (try_lock_lockable "std::mutex" (λ q γP, R γP.1 q γP.2))).
+    cpp.spec "std::mutex::try_lock()" as try_lock_spec with
+      (\exact Reduce (try_lock_lockable "std::mutex" (λ q γP, R γP.1 q γP.2))).
 
-  Lemma lock_spec_entails_lock_spec_alt : lock_spec -|- lock_spec_alt.
-  Proof.
-    apply (Spec.lock_spec_entails_lock_spec_alt R lock_state_gname).
-    reflexivity.
-  Qed.
+    Lemma lock_spec_entails_lock_spec_alt : lock_spec -|- lock_spec_alt.
+    Proof.
+      apply (Spec.lock_spec_entails_lock_spec_alt R lock_state_gname).
+      reflexivity.
+    Qed.
 
-  Lemma unlock_spec_entails_unlock_spec_alt : unlock_spec -|- unlock_spec_alt.
-  Proof.
-    apply (Spec.unlock_spec_entails_unlock_spec_alt R lock_state_gname).
-    reflexivity.
-  Qed.
+    Lemma unlock_spec_entails_unlock_spec_alt : unlock_spec -|- unlock_spec_alt.
+    Proof.
+      apply (Spec.unlock_spec_entails_unlock_spec_alt R lock_state_gname).
+      reflexivity.
+    Qed.
 
-  Lemma try_lock_spec_entails_try_lock_spec_alt : try_lock_spec -|- try_lock_spec_alt.
-  Proof.
-    apply (Spec.try_lock_spec_entails_try_lock_spec_alt R lock_state_gname).
-    reflexivity.
-  Qed.
-End with_cpp.
+    Lemma try_lock_spec_entails_try_lock_spec_alt : try_lock_spec -|- try_lock_spec_alt.
+    Proof.
+      apply (Spec.try_lock_spec_entails_try_lock_spec_alt R lock_state_gname).
+      reflexivity.
+    Qed.
+  End with_cpp.
 End StdMutex.
-
-(** The standard-library implementation remains abstract; concrete mutex
-    implementations instantiate [MUTEX_PREDS] beside their proofs. *)
-Declare Module StdMutexState : MUTEX_PREDS with Definition Q := Qp.
-Module StdMutexInst := StdMutex StdMutexState.
-Module mutex := StdMutexInst.
