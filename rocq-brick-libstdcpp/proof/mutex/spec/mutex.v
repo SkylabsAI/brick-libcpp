@@ -16,15 +16,45 @@ Require Import skylabs.brick.libstdcpp.lib.lock_ghost2.
 
 Import linearity.
 
+(** A MUTEX_PREDS says a mutex spec is parametrized by some `token`, `not_locked`
+  and `locked`. The exact model depends on the implementation. *)
+Module Type MUTEX_PREDS.
+  Parameter gname : Set.
+  Parameter Q : Type.
+  (* FIXME do we need these? *)
+  Parameter pool_name inv_name : gname -> iprop.gname.
+
+  Parameter G : forall `{Σ : cpp_logic}, Type.
+  Existing Class G.
+  #[global] Arguments G {_ _} Σ : assert.
+
+  (** [Q] describes the permissions transferred by lock and unlock. *)
+  Parameter token : forall `{Σ : cpp_logic, !G Σ},
+    gname -> Qp -> mpred.
+  Parameter not_locked locked : forall `{Σ : cpp_logic, !G Σ} {σ : genv},
+    ptr -> gname -> thread_idT -> Q -> mpred.
+
+  #[global] Declare Instance token_fractional
+      `{Σ : cpp_logic, !G Σ} γ : Fractional (token γ).
+  #[global] Declare Instance token_timeless
+      `{Σ : cpp_logic, !G Σ} γ q : Timeless (token γ q).
+  #[global] Declare Instance locked_timeless
+      `{Σ : cpp_logic, !G Σ} {σ : genv} this γ th q :
+    Timeless (locked this γ th q).
+  #[global] Declare Instance locked_exclusive
+      `{Σ : cpp_logic, !G Σ} {σ : genv} this γ q :
+    Exclusive1 (fun th => locked this γ th q).
+End MUTEX_PREDS.
+
 (* TODO UPSTREAM. *)
 #[global] Instance SplitRecord_prod A B : SplitRecord (@prod A B) := {}.
 
-Module mutex_spec (State : lock_ghost2.MUTEX_STATE).
+Module mutex_spec (Preds : MUTEX_PREDS).
 Section with_cpp.
   Context `{Σ : cpp_logic} {σ : genv} {Name : Type}.
-  Context `{!State.G Σ}.
+  Context `{!Preds.G Σ}.
   Context (R : Name -> cQp.t -> mpred -> Rep).
-  Context (state_name : Name -> State.gname).
+  Context (state_name : Name -> Preds.gname).
   Context {HAS_THREADS : HasStdThreads Σ}.
 
   (** The guarded predicate must be weakly objective for invariant allocation,
@@ -32,55 +62,55 @@ Section with_cpp.
   Definition ctor_spec : ptr -> WpSpec mpred val val :=
     (\this this
       \pre{P γpool} ▷P ** [| WeaklyObjective P |]
-      \post |={⊤}=> Exists g, [| State.pool_name (state_name g) = γpool |] **
-              this |-> R g 1$m P ** State.token (state_name g) 1).
+      \post |={⊤}=> Exists g, [| Preds.pool_name (state_name g) = γpool |] **
+              this |-> R g 1$m P ** Preds.token (state_name g) 1).
 
   Definition dtor_spec : ptr -> WpSpec mpred val val :=
     (\this this
-      \pre{g P} this |-> R g 1$m P ** State.token (state_name g) 1
+      \pre{g P} this |-> R g 1$m P ** Preds.token (state_name g) 1
       \post P).
 
   Definition lock_spec_alt : ptr -> WpSpec mpred val val :=
     (\this this
       \prepost{q P g} this |-> R g q P
       \persist{thr} current_thread thr
-      \pre{qt} State.not_locked this (state_name g) thr qt
-      \post P ** State.locked this (state_name g) thr qt).
+      \pre{qt} Preds.not_locked this (state_name g) thr qt
+      \post P ** Preds.locked this (state_name g) thr qt).
 
   Definition unlock_spec_alt : ptr -> WpSpec mpred val val :=
     (\this this
       \prepost{q P g} this |-> R g q P
       \persist{thr} current_thread thr
-      \pre{qt} State.locked this (state_name g) thr qt
+      \pre{qt} Preds.locked this (state_name g) thr qt
       \pre ▷P
-      \post State.not_locked this (state_name g) thr qt).
+      \post Preds.not_locked this (state_name g) thr qt).
 
   Definition try_lock_spec_alt : ptr -> WpSpec mpred val val :=
     (\this this
       \prepost{q P g} this |-> R g q P
       \persist{thr} current_thread thr
-      \pre{qt} State.not_locked this (state_name g) thr qt
+      \pre{qt} Preds.not_locked this (state_name g) thr qt
       \post{b}[Vbool b]
-        if b then P ** State.locked this (state_name g) thr qt
-        else State.not_locked this (state_name g) thr qt).
+        if b then P ** Preds.locked this (state_name g) thr qt
+        else Preds.not_locked this (state_name g) thr qt).
 
   (* TODO readd the later on the lock/unlock continuations. *)
   Definition do_lock (this : ptr) (lk : Name * mpred) (K : mpred) : mpred :=
-    ∃ thr qt, current_thread thr ** State.not_locked this (state_name lk.1) thr qt **
-      (State.locked this (state_name lk.1) thr qt ** lk.2 -* K).
+    ∃ thr qt, current_thread thr ** Preds.not_locked this (state_name lk.1) thr qt **
+      (Preds.locked this (state_name lk.1) thr qt ** lk.2 -* K).
   #[global] Arguments do_lock /.
 
   Definition do_unlock (this : ptr) (lk : Name * mpred) (K : mpred) : mpred :=
-    ∃ thr qt, current_thread thr ** State.locked this (state_name lk.1) thr qt ** ▷lk.2 **
-      (State.not_locked this (state_name lk.1) thr qt -* K).
+    ∃ thr qt, current_thread thr ** Preds.locked this (state_name lk.1) thr qt ** ▷lk.2 **
+      (Preds.not_locked this (state_name lk.1) thr qt -* K).
   #[global] Arguments do_unlock /.
 
   Definition do_try_lock (this : ptr) (lk : Name * mpred)
       (K : bool -> mpred) : mpred :=
-    ∃ thr qt, current_thread thr ** State.not_locked this (state_name lk.1) thr qt **
+    ∃ thr qt, current_thread thr ** Preds.not_locked this (state_name lk.1) thr qt **
       ∀ b : bool,
-        (if b then lk.2 ** State.locked this (state_name lk.1) thr qt
-          else State.not_locked this (state_name lk.1) thr qt) -* K b.
+        (if b then lk.2 ** Preds.locked this (state_name lk.1) thr qt
+          else Preds.not_locked this (state_name lk.1) thr qt) -* K b.
   #[global] Arguments do_try_lock /.
 
   Section equivalences.
@@ -110,7 +140,7 @@ Section with_cpp.
       - ework with br_erefl.
       - iIntros "H". iDestruct "H" as (q P g thr qt)
           "(%Hxs & HR & #HT & HNL & HK)".
-        iExists q, (g, P), (P ** State.locked this (state_name g) thr qt)%I.
+        iExists q, (g, P), (P ** Preds.locked this (state_name g) thr qt)%I.
         iFrame "HR HK". iSplit; first done.
         iExists thr, qt. iFrame "HT HNL".
         iIntros "[HL HP]". iFrame.
@@ -128,7 +158,7 @@ Section with_cpp.
       - ework with br_erefl.
       - iIntros "H". iDestruct "H" as (q P g thr qt)
           "(%Hxs & HR & #HT & HL & HP & HK)".
-        iExists q, (g, P), (State.not_locked this (state_name g) thr qt).
+        iExists q, (g, P), (Preds.not_locked this (state_name g) thr qt).
         iFrame "HR HK". iSplit; first done.
         iExists thr, qt. iFrame "HT HL HP".
         iIntros "$".
@@ -149,8 +179,8 @@ Section with_cpp.
       - iIntros "H". iDestruct "H" as (q P g thr qt)
           "(%Hxs & HR & #HT & HNL & HK)".
         iExists q, (g, P), (fun b : bool =>
-          if b then (P ** State.locked this (state_name g) thr qt)%I
-          else State.not_locked this (state_name g) thr qt).
+          if b then (P ** Preds.locked this (state_name g) thr qt)%I
+          else Preds.not_locked this (state_name g) thr qt).
         iFrame "HR HK". iSplit; first done.
         iExists thr, qt. iFrame "HT HNL".
         iIntros (b) "$".
@@ -162,21 +192,21 @@ End mutex_spec.
 
 (** Specialize the reusable specs to the standard mutex representation and
     bind them to their C++ names. *)
-Module StdMutex (State : lock_ghost2.MUTEX_STATE).
-  Module Spec := mutex_spec State.
+Module StdMutex (Preds : MUTEX_PREDS).
+  Module Spec := mutex_spec Preds.
 
-  Definition gname := State.gname.
+  Definition gname := Preds.gname.
   Definition lock_state_gname (g : gname) := g.
-  Abbreviation cinv_gname := State.inv_name.
+  Abbreviation cinv_gname := Preds.inv_name.
 
-  Definition G := @State.G.
+  Definition G := @Preds.G.
   Existing Class G.
   #[global] Arguments G {_ _} Σ : assert.
-  #[global] Instance state_G `{Σ : cpp_logic} (H : G Σ) : State.G Σ := H.
+  #[global] Instance state_G `{Σ : cpp_logic} (H : G Σ) : Preds.G Σ := H.
 
-  Abbreviation token := State.token.
-  Abbreviation not_locked := State.not_locked.
-  Abbreviation locked := State.locked.
+  Abbreviation token := Preds.token.
+  Abbreviation not_locked := Preds.not_locked.
+  Abbreviation locked := Preds.locked.
 
 Section with_cpp.
   Context `{Σ : cpp_logic}.
@@ -271,7 +301,7 @@ End with_cpp.
 End StdMutex.
 
 (** The standard-library implementation remains abstract; concrete mutex
-    implementations instantiate [MUTEX_STATE] beside their proofs. *)
-Declare Module StdMutexState : lock_ghost2.MUTEX_STATE with Definition Q := Qp.
+    implementations instantiate [MUTEX_PREDS] beside their proofs. *)
+Declare Module StdMutexState : MUTEX_PREDS with Definition Q := Qp.
 Module StdMutexInst := StdMutex StdMutexState.
 Module mutex := StdMutexInst.
