@@ -15,7 +15,7 @@ Require Import skylabs.brick.libstdcpp.test.mutex.custom_mutex_hpp.
 (** The ghost implementation and its physical client predicates are specific
     to [MyMutex]. The entire mutex-set pool still uses one shared ghost name. *)
 Module CustomMutexState (Sets0 : MUTEX_SETS) (Tokens0 : MUTEX_TOKENS)
-    (Owners0 : OWNER_TID) <: MUTEX_STATE.
+    (Owners0 : OWNER_TID) <: MUTEX_PREDS.
   Record mutex_gname : Set := MkGname {
     pool_gname : iprop.gname;
     invariant_gname : iprop.gname;

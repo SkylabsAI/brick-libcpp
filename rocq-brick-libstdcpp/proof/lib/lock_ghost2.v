@@ -11,7 +11,7 @@ Require Export skylabs.brick.libstdcpp.runtime.pred.
 
 Import linearity.
 
-(**  Ghost state and laws for mutex specs and proofs. *)
+(**  Various ghost state constructions and laws for concurrency library specs and proofs. *)
 
 (** MUTEX_SETS has 2 parts: `mutex_set_map g (T:get thread_idT)` for registering
   new threads and allocating their `my_mutexes g th` with
@@ -171,36 +171,6 @@ Module Type OWNER_TID.
     owner_tid_auth γ oa ** owner_tid_frag γ ofrag |--
       (|==> owner_tid_auth γ o' ** owner_tid_frag γ o').
 End OWNER_TID.
-
-(** A MUTEX_STATE says a mutex spec is parametrized by some `token`, `not_locked`
-  and `locked`. The exact model depends on the implementation. *)
-Module Type MUTEX_STATE.
-  Parameter gname : Set.
-  Parameter Q : Type.
-  (* FIXME do we need these? *)
-  Parameter pool_name inv_name : gname -> iprop.gname.
-
-  Parameter G : forall `{Σ : cpp_logic}, Type.
-  Existing Class G.
-  #[global] Arguments G {_ _} Σ : assert.
-
-  (** [Q] describes the permissions transferred by lock and unlock. *)
-  Parameter token : forall `{Σ : cpp_logic, !G Σ},
-    gname -> Qp -> mpred.
-  Parameter not_locked locked : forall `{Σ : cpp_logic, !G Σ} {σ : genv},
-    ptr -> gname -> thread_idT -> Q -> mpred.
-
-  #[global] Declare Instance token_fractional
-      `{Σ : cpp_logic, !G Σ} γ : Fractional (token γ).
-  #[global] Declare Instance token_timeless
-      `{Σ : cpp_logic, !G Σ} γ q : Timeless (token γ q).
-  #[global] Declare Instance locked_timeless
-      `{Σ : cpp_logic, !G Σ} {σ : genv} this γ th q :
-    Timeless (locked this γ th q).
-  #[global] Declare Instance locked_exclusive
-      `{Σ : cpp_logic, !G Σ} {σ : genv} this γ q :
-    Exclusive1 (fun th => locked this γ th q).
-End MUTEX_STATE.
 
 (* Proofs that the ghost state modules are inhabited. *)
 
