@@ -38,7 +38,9 @@ Section with_cpp.
       rewrite !RedEq_eq_iff => Heq Havail.
       case: Heq => Hcls Harr.
       rewrite -(wp_init_initlist_std tu ρ cls base (decompose_type ty).1 ty backing aety n Q).
-      - done.
+      - (* The typing side condition holds by reduction: [decltype.of_expr]
+           takes [Econstructor _ _ ty] to [ty]. *)
+        cbv zeta. by rewrite only_provable_True// left_id.
       - by rewrite {1}(surjective_pairing (decompose_type ty)) Hcls.
       - exact: Harr.
       - exact: Havail.
