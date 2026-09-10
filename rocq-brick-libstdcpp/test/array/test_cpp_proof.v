@@ -27,13 +27,6 @@ Section with_cpp.
   Definition sum (xs : list Z) : Z := foldr Z.add 0 xs.
   #[global] Arguments sum !_ / : simpl nomatch.
 
-  (** [go] reduces an element read to a successful [!!] lookup; the specifications
-      below state the result with the total lookup [!!!]. *)
-  #[local] Ltac lookup_total :=
-    repeat match goal with
-    | H : _ !! _ = Some _ |- _ => rewrite (lookup_total_correct _ _ _ H)
-    end.
-
   (** ** Capacity
 
       <<size>>, <<max_size>> and <<empty>> are fixed by the type. *)
@@ -72,7 +65,7 @@ Section with_cpp.
      \post[Vint (xs !!! i)] emp).
 
   Lemma get_ok : verify[ source ] get_spec.
-  Proof using MOD. verify_spec; go. by lookup_total. Qed.
+  Proof using MOD. verify_spec; go. Qed.
 
   (** Writing through <<operator[]>> is stated with the tight footprint the
       specification is designed for: the spine plus the single element being
@@ -99,7 +92,7 @@ Section with_cpp.
      \post[Vint (xs !!! i)] emp).
 
   Lemma get_at_ok : verify[ source ] get_at_spec.
-  Proof using MOD. verify_spec; go. by lookup_total. Qed.
+  Proof using MOD. verify_spec; go. Qed.
 
   cpp.spec "Front(const std::array<int, 3ul>&)" as front_spec with
     (\arg{ap} "a" (Vref ap)
@@ -266,7 +259,7 @@ Section with_cpp.
      \post[Vint (xs !!! i)] emp).
 
   Lemma get_u_ok : verify[ source ] get_u_spec.
-  Proof using MOD. verify_spec; go. by lookup_total. Qed.
+  Proof using MOD. verify_spec; go. Qed.
 
   cpp.spec "SizeU(const std::array<unsigned int, 5ul>&)" as size_u_spec with
     (\arg{ap} "a" (Vref ap)
@@ -287,7 +280,7 @@ Section with_cpp.
      \post[Vint ((xss !!! i) !!! j)] emp).
 
   Lemma get_nested_ok : verify[ source ] get_nested_spec.
-  Proof using MOD. verify_spec; go. by lookup_total. Qed.
+  Proof using MOD. verify_spec; go. Qed.
 
   (** ** Remaining entry points *)
 
