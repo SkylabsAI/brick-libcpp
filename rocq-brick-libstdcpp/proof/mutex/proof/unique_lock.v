@@ -11,6 +11,7 @@ NES.Begin unique_lock.
   Section with_cpp.
     Context `{Σ : cpp_logic} {σ : genv}.
     Context `{HAS_THREADS : !HasStdThreads Σ}.
+    Context `{!mutex.G Σ}.
 
     Import R_unfold.
 
@@ -43,10 +44,9 @@ NES.Begin unique_lock.
         "std::unique_lock<std::mutex>::unique_lock(std::mutex&)".
     Proof.
       verify_spec; go.
-      iExists K.
+      iExists K, t, q.
       (* Time Succeed solve [setoid_rewrite cQp.scale_mut; setoid_rewrite (right_id_L 1%Qp Qp.mul); ego with br_erefl]. *)
 
-      iExists _, q.
       rewrite cQp.scale_mut (right_id_L 1%Qp Qp.mul).
       go with br_erefl.
     Qed.

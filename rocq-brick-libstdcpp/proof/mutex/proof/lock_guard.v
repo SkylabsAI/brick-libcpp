@@ -9,6 +9,7 @@ Import linearity.
 Section with_cpp.
   Context `{Σ : cpp_logic, σ : genv}.
   Context {HAS_THREADS : HasStdThreads Σ}.
+  Context `{!mutex.G Σ}.
 
   Import lock_guard.
 
@@ -17,16 +18,15 @@ Section with_cpp.
       Cbn (Learn (learn_eq ==> learn_eq ==> learn_eq ==> fin_at) mutex.R).
   Proof. solve_learnable. Qed.
 
-  #[global] Instance UNSAFE_token_learn : Cbn (Learn (req_eq ==> learn_eq ==> learn_hints.fin) mutex.token).
-  Proof. solve_learnable. Qed.
-
   #[local] Hint Resolve fractional.UNSAFE_read_prim_learn : sl_opacity.
 
   Lemma ctor_ok : verify[source] ctor_spec.
   Proof.
     verify_spec.
     go.
-    by rewrite left_id_L.
+    iExists (mutex.locked mp g thr qt ** P), qt.
+    go with br_erefl.
+    by rewrite (left_id_L 1%Qp Qp.mul).
   Qed.
 
   Lemma dtor_ok : verify[source] dtor_spec.
@@ -34,7 +34,9 @@ Section with_cpp.
     verify_spec.
     rewrite !R.unlock.
     go.
-    by rewrite !left_id_L.
+    iExists (mutex.not_locked mp g thr qt), qt.
+    go with br_erefl.
+    by rewrite (left_id_L 1%Qp Qp.mul).
   Qed.
 
 End with_cpp.

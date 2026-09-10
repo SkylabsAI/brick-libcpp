@@ -11,6 +11,30 @@
   	 (with-stderr-to inc_algorithms_cpp.v.stderr (run cpp2v -v %{input} -o inc_algorithms_cpp.v --no-elaborate --templates=inc_algorithms_cpp_templates.v  -- -std=c++20 -stdlib=libstdc++ ))))
  (alias (name srcs) (deps inc_algorithms.cpp))
 )
+(subdir atomic
+ (rule
+  (targets inc_int_cpp.v.stderr inc_int_cpp.v inc_int_cpp_templates.v)
+  (alias test_ast)
+  (deps
+   (:input inc_int.cpp)
+   (env_var CPP2V_DOCKER_ENABLED)
+   (glob_files_rec ../*.hpp))
+  (action
+  	 (with-stderr-to inc_int_cpp.v.stderr (run cpp2v -v %{input} -o inc_int_cpp.v --no-elaborate --templates=inc_int_cpp_templates.v  -- -std=c++20 -stdlib=libstdc++ ))))
+ (alias (name srcs) (deps inc_int.cpp))
+)
+(subdir atomic
+ (rule
+  (targets test_cpp.v.stderr test_cpp.v test_cpp_templates.v)
+  (alias test_ast)
+  (deps
+   (:input test.cpp)
+   (env_var CPP2V_DOCKER_ENABLED)
+   (glob_files_rec ../*.hpp))
+  (action
+  	 (with-stderr-to test_cpp.v.stderr (run cpp2v -v %{input} -o test_cpp.v --no-elaborate --templates=test_cpp_templates.v  -- -std=c++20 -stdlib=libstdc++ ))))
+ (alias (name srcs) (deps test.cpp))
+)
 (subdir cassert
  (rule
   (targets inc_cassert_cpp.v.stderr inc_cassert_cpp.v inc_cassert_cpp_templates.v)

@@ -7,6 +7,7 @@ Require Import skylabs.brick.libstdcpp.allocator.spec.
 Require Import skylabs.brick.libstdcpp.cassert.spec.
 Require Import skylabs.brick.libstdcpp.vector.spec.
 Require Import skylabs.brick.libstdcpp.algorithms.spec.
+Require Import skylabs.brick.libstdcpp.lib.tactics.
 Require Import skylabs.brick.libstdcpp.test.vector.test_cpp.
 
 Require Import skylabs.auto.cpp.prelude.test.
@@ -202,9 +203,6 @@ Section with_cpp.
 
     Import linearity.
     Import normalize.normalize_ptr normalize.only_provable_norm.
-
-    (* UPSTREAM. Where? *)
-    #[global] Instance SplitRecord_prod A B : SplitRecord (@prod A B) := {}.
 
     Lemma test_int_iter_ok : verify[ source ] test_int_iter.
     Proof using MOD.

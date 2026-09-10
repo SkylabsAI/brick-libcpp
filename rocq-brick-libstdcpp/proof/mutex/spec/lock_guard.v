@@ -16,9 +16,10 @@ End TO_UPSTREAM.
 Module lock_guard.
 
   sl.lock
-  Definition R `{Σ : cpp_logic, !HasStdThreads Σ} {σ : genv} (mp : ptr * gname * Qp) (q : cQp.t) (P : mpred) : Rep :=
+  Definition R `{Σ : cpp_logic, !HasStdThreads Σ} {σ : genv}
+      (mp : ptr * mutex.gname * Qp * Qp) (q : cQp.t) (P : mpred) : Rep :=
     structR "std::lock_guard<std::mutex>" q **
-    let '(mp, g, q') := mp in
+    let '(mp, g, q', _) := mp in
     _field "std::lock_guard<std::mutex>::_M_device" |-> refR<"std::mutex"> q mp **
     pureR (
       mp |-> mutex.R g (q * q')$m P).
@@ -47,6 +48,7 @@ Module lock_guard.
 Section with_cpp.
   Context `{Σ : cpp_logic, σ : genv}.
   Context {HAS_THREADS : HasStdThreads Σ}.
+  Context `{!mutex.G Σ}.
 
   #[global] Instance R_learn :
     Cbn (Learn (learn_eq ==> any ==> learn_eq ==> learn_hints.fin) lock_guard.R) :=
@@ -86,21 +88,21 @@ Section with_cpp.
     \this this
     \arg{mp} "m" (Vptr mp)
     \persist{thr} current_thread thr
-    \pre{g q P} mp |-> mutex.R g q$m P
-    \pre mutex.token g q
+    \pre{g q qt P} mp |-> mutex.R g q$m P
+    \pre mutex.not_locked mp g thr qt
     \post
-      this |-> R (mp, g, q) 1$m P **
-      P ** mutex.locked g thr q
+      this |-> R (mp, g, q, qt) 1$m P **
+      P ** mutex.locked mp g thr qt
     ).
 
   cpp.spec "std::lock_guard<std::mutex>::~lock_guard()" as dtor_spec from source with (
     \this this
-    \pre{mp g q P} this |-> R (mp, g, q) 1$m P
+    \pre{mp g q qt P} this |-> R (mp, g, q, qt) 1$m P
     \persist{thr} current_thread thr
-    \pre mutex.locked g thr q
+    \pre mutex.locked mp g thr qt
     \pre ▷P
     \post
-      mutex.token g q **
+      mutex.not_locked mp g thr qt **
       mp |-> mutex.R g q$m P
   ).
 
@@ -108,10 +110,10 @@ Section with_cpp.
 
     Import skylabs.auto.cpp.prelude.proof.
 
-    Lemma mutex_borrow mp g P (this : ptr) (q1 q2 : Qp) :
-      this |-> R (mp, g, (q1 + q2)%Qp) 1$m P |--
+    Lemma mutex_borrow mp g P (this : ptr) (q1 q2 qt : Qp) :
+      this |-> R (mp, g, (q1 + q2)%Qp, qt) 1$m P |--
       mp |-> mutex.R g q1$m P **
-      this |-> R (mp, g, q2) 1$m P.
+      this |-> R (mp, g, q2, qt) 1$m P.
     Proof.
       rewrite R.unlock.
       work.
@@ -124,4 +126,3 @@ Section with_cpp.
 
 End with_cpp.
 End lock_guard.
-
