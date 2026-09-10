@@ -9,7 +9,7 @@ Module scoped_lock.
     Context `{Σ : cpp_logic}.
 
     Parameter R : forall {HAS_THREADS : HasStdThreads Σ} {σ : genv},
-      cQp.t -> list (ptr * mutex.gname * Qp * Qp * mpred) -> Rep.
+      cQp.t -> list (ptr * mutex.gname * Qp * cQp.t * mpred) -> Rep.
 
     #[only(type_ptr="std::scoped_lock<std::mutex, std::mutex>")] derive R.
     #[only(cfractional,ascfractional,cfracvalid)] derive R.

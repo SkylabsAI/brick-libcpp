@@ -17,7 +17,7 @@ Module lock_guard.
 
   sl.lock
   Definition R `{Σ : cpp_logic, !HasStdThreads Σ} {σ : genv}
-      (mp : ptr * mutex.gname * Qp * Qp) (q : cQp.t) (P : mpred) : Rep :=
+      (mp : ptr * mutex.gname * Qp * cQp.t) (q : cQp.t) (P : mpred) : Rep :=
     structR "std::lock_guard<std::mutex>" q **
     let '(mp, g, q', _) := mp in
     _field "std::lock_guard<std::mutex>::_M_device" |-> refR<"std::mutex"> q mp **
@@ -110,7 +110,7 @@ Section with_cpp.
 
     Import skylabs.auto.cpp.prelude.proof.
 
-    Lemma mutex_borrow mp g P (this : ptr) (q1 q2 qt : Qp) :
+    Lemma mutex_borrow mp g P (this : ptr) (q1 q2 : Qp) (qt : cQp.t) :
       this |-> R (mp, g, (q1 + q2)%Qp, qt) 1$m P |--
       mp |-> mutex.R g q1$m P **
       this |-> R (mp, g, q2, qt) 1$m P.

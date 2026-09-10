@@ -306,3 +306,8 @@ Module StdMutex (Preds : MUTEX_PREDS).
     Qed.
   End with_cpp.
 End StdMutex.
+
+(** The standard-library implementation remains abstract; concrete mutex
+    implementations supply their own [MUTEX_PREDS]. *)
+Declare Module StdMutexPreds : MUTEX_PREDS.
+Module mutex := StdMutex StdMutexPreds.
