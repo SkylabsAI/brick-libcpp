@@ -12,6 +12,8 @@ Require Export skylabs.brick.libstdcpp.runtime.pred.
 
 Require Import skylabs.brick.libstdcpp.mutex.inc_hpp.
 Require Import skylabs.brick.libstdcpp.mutex.requirements.
+Require Import skylabs.brick.libstdcpp.lib.lock_ghost.
+Export skylabs.brick.libstdcpp.lib.lock_ghost(lockG).
 
 Import linearity.
 
@@ -28,20 +30,13 @@ Section with_cpp.
   #[global] Declare Instance R_learnable : forall {HAS_THREADS : HasStdThreads Σ} {σ : genv},
       Cbn (Learn (learn_eq ==> any ==> learn_eq ==> learn_hints.fin) R).
 
-  (** Owning [mutex_token γ 1] proves that the mutex is not locked, and
-  therefore can be safely destroyed: the standard specifies that calling
-  [std::mutex::~mutex()] while holding the lock results in undefined behavior.
-  *)
-  Parameter token : forall {HAS_THREADS : HasStdThreads Σ} {σ : genv}, gname -> Qp -> mpred.
-  #[only(fractional,fracvalid,asfractional,timeless)] derive token.
-
   Section with_RepFor.
     Import rep.RepFor.
     Import RepScheme.
 
     #[global] Instance repfor `{!HasStdThreads Σ} {σ : genv} :
       rep.RepFor.C "std::mutex" [ArgType.Constant _; ArgType.CFrac; ArgType.Constant _]
-        (funI γ q P => R γ q P ∗ pureR (token γ q)) := {}.
+        (funI γ q P => R γ q P) := {}.
   End with_RepFor.
 
 
@@ -65,27 +60,36 @@ Section with_cpp.
     >>
    *)
   Parameter locked : forall {HAS_THREADS : HasStdThreads Σ} {σ : genv},
-      gname -> thread_idT -> Qp -> mpred.
+      gname -> thread_idT -> mpred.
   #[only(timeless)] derive locked.
 
-  (** locked takes a [Qp] but _cannot_ be split. *)
   #[only(exclusive)] derive locked.
+
+  Context `{!lockG Σ}.
+
+  Abbreviation used_threads γ s :=
+    (lock_ghost.used_threads γ s).
+
+  Abbreviation users γ ths :=
+    (lock_ghost.users γ ths).
+
+  Abbreviation user γ th := (users γ {[ th ]}).
 
   Context `{MOD : source ⊧ σ}.
   Context {HAS_THREADS : HasStdThreads Σ}.
 
-  #[global] Instance locked_learn : Cbn (Learn (req_eq ==> learn_eq ==> learn_eq ==> learn_hints.fin) locked).
+  #[global] Instance locked_learn : Cbn (Learn (req_eq ==> learn_eq ==> learn_hints.fin) locked).
   Proof. solve_learnable. Qed.
 
 
   cpp.spec "std::mutex::mutex()" as ctor_spec with (
     \this this
     \pre{P} ▷P
-    \post Exists g, this |-> R g 1$m P ** token g 1).
+    \post Exists g, this |-> R g 1$m P ** used_threads g ∅).
 
   cpp.spec "std::mutex::~mutex()" as dtor_spec with (
     \this this
-    \pre{g P} this |-> R g 1$m P ** token g 1
+    \pre{g P} this |-> R g 1$m P ** used_threads g ∅
     \post P).
 
   (* "Inline" version of these specs. *)
@@ -93,41 +97,41 @@ Section with_cpp.
     \this this
     \prepost{q P g} this |-> R g q P
     \persist{thr} current_thread thr
-    \pre{q'} token g q'
-    \post P ** locked g thr q').
+    \pre user g thr
+    \post P ** locked g thr).
 
   Definition do_lock (lk : gname * mpred) (K: mpred) : mpred :=
     let g := lk.1 in
     let P := lk.2 in
-    ∃ q thr, current_thread thr ∗ token g q ∗
+    ∃ thr, current_thread thr ∗ user g thr ∗
     (* TODO readd *)
     (* ▷ *)
-    (locked g thr q ** P -* K).
+    (locked g thr ** P -* K).
   #[global] Arguments do_lock /.
 
   cpp.spec "std::mutex::unlock()" as unlock_spec_alt with (
     \this this
     \prepost{q P g} this |-> R g q P
     \persist{thr} current_thread thr
-    \pre{q'} locked g thr q'
+    \pre locked g thr
     \pre ▷P
-    \post token g q').
+    \post user g thr).
 
   Definition do_unlock (lk : gname * mpred) (Q : mpred) : mpred :=
     let g := lk.1 in
     let P := lk.2 in
-    Exists q thr, current_thread thr ** locked g thr q ** ▷P **
+    Exists thr, current_thread thr ** locked g thr ** ▷P **
     (* TODO readd *)
     (* ▷ *)
-    (token g q -* Q).
+    (user g thr -* Q).
   #[global] Arguments do_unlock /.
 
   cpp.spec "std::mutex::try_lock()" as try_lock_spec_alt with (
     \this this
     \prepost{q P g} this |-> R g q P
     \persist{th} current_thread th
-    \pre{q'} token g q'
-    \post{b}[Vbool b] if b then P ** locked g th q' else token g q').
+    \pre user g th
+    \post{b}[Vbool b] if b then P ** locked g th else user g th).
 
   (* Obtain same specs from (Basic)Lockable. *)
   (** <<std::mutex>> implements [BasicLockable] *)
@@ -146,9 +150,9 @@ Section with_cpp.
   Definition do_try_lock (lk : gname * mpred) (Q : bool -> mpred) : mpred :=
     let g := lk.1 in
     let P := lk.2 in
-    ∃ q thr, current_thread thr ∗ token g q ∗
+    ∃ thr, current_thread thr ∗ user g thr ∗
     ∀ b : bool,
-    (if b then P ** locked g thr q else token g q) -∗ Q b.
+    (if b then P ** locked g thr else user g thr) -∗ Q b.
   #[global] Arguments do_try_lock /.
 
   #[global,program] Instance mutex_lockable : Lockable (T:=T) "std::mutex" (λ q γP, R γP.1 q γP.2) :=
@@ -173,4 +177,3 @@ Section with_cpp.
   Qed.
 End with_cpp.
 End mutex.
-
