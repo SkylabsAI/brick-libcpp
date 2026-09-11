@@ -11,6 +11,18 @@
   	 (with-stderr-to inc_algorithms_cpp.v.stderr (run cpp2v -v %{input} -o inc_algorithms_cpp.v --no-elaborate --templates=inc_algorithms_cpp_templates.v  -- -std=c++20 -stdlib=libstdc++ ))))
  (alias (name srcs) (deps inc_algorithms.cpp))
 )
+(subdir array
+ (rule
+  (targets inc_array_cpp.v.stderr inc_array_cpp.v inc_array_cpp_templates.v)
+  (alias test_ast)
+  (deps
+   (:input inc_array.cpp)
+   (env_var CPP2V_DOCKER_ENABLED)
+   (glob_files_rec ../*.hpp))
+  (action
+  	 (with-stderr-to inc_array_cpp.v.stderr (run cpp2v -v %{input} -o inc_array_cpp.v --no-elaborate --templates=inc_array_cpp_templates.v  -- -std=c++20 -stdlib=libstdc++ ))))
+ (alias (name srcs) (deps inc_array.cpp))
+)
 (subdir cassert
  (rule
   (targets inc_cassert_cpp.v.stderr inc_cassert_cpp.v inc_cassert_cpp_templates.v)
