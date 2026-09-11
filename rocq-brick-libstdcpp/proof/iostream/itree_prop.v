@@ -43,13 +43,15 @@ Section interp_itree.
   #[local]
   Instance interp_do_body_contractive {T} {K : T -> PROP} : Contractive (interp_do_body K).
   Proof using PROP_LATER.
-    repeat intro.
+    intros ??? Hdist x0.
     destruct x0; simpl; try eauto.
     { apply later_contractive. constructor.
-      intros. apply H. done. }
-    { eapply do_ne. done.
-      intro. apply bi.exist_ne; intro. apply bi.sep_ne. done. apply later_contractive.
-      constructor; intros; apply H; done. }
+      intros. apply Hdist. done. }
+    { eapply do_ne => //.
+      intro.
+      do 3 f_equiv => //.
+      apply later_contractive.
+      by constructor; intros; apply Hdist. }
   Qed.
 
   Definition interp_itree {T} (it : itree E T) (K : T -> PROP) : PROP :=
