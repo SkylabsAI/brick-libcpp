@@ -253,7 +253,9 @@ Section to_spectra.
     iSplitR.
     { iPureIntro.
       intros. destruct ANY_STEP.
-      inversion H0; subst. edestruct _safe0. done. intuition; eauto. }
+      inversion H0; subst.
+      edestruct _safe0; first by [].
+      intuition; eauto. }
     iIntros (?) "[% Hfrag]". iMod "Hclose".
     work.
     iApply bupd_fupd.
@@ -296,7 +298,9 @@ Section to_spectra.
     { iPureIntro. split.
       { apply AnyStep_invert_nonempty in ANY_STEP. tauto. }
       intros. destruct ANY_STEP.
-      inversion H1; subst. edestruct _safe0. done. intuition; eauto. }
+      inversion H1; subst.
+      edestruct _safe0; first by [].
+      intuition; eauto. }
     iIntros (?) "[% Hfrag]". iMod "Hclose".
     work.
     iApply bupd_fupd.
@@ -473,8 +477,9 @@ Proof.
         have->: (BS.String b str ++ rest = BS.String b (str ++ rest))%bs by done.
         constructor => //. }
       { inversion 1; subst.
-        eexists _; split. set_solver.
-        constructor. } } }
+        eexists _; split.
+        - set_solver.
+        - constructor. } } }
 Qed.
 
 #[global]
