@@ -92,10 +92,10 @@ NES.Begin std.
 
        NOTE: because the iterators are raw pointers, a loop condition such as
          <<it != a.end()>> is a builtin pointer comparison between two distinct
-         pointers into the same array. The current automation cannot discharge the
-         resulting [ptr_comparable] side condition, so client loops over a
-         <<std::array>> should iterate by index (<<a[i]>>) rather than by iterator.
-         See the smoke tests in <<test/array>> for a verified index loop.
+         pointers into the same array. Which of the resulting side conditions can
+         be discharged is recorded by [begin_is_not_end_ok] in <<test/array>>
+         rather than here, so that it cannot go stale; that file also carries a
+         verified loop that iterates by index (<<a[i]>>) instead.
 
        Reference:
          - https://eel.is/c++draft/array
@@ -231,9 +231,10 @@ NES.Begin std.
           NOTE: the converse — that they differ when [0 < n] — is not provable from
           these definitions alone. It needs [same_address_o_sub_eq], i.e. that distinct
           indices into an array whose element type has positive size have distinct
-          addresses. That is the same missing ingredient as the [ptr_comparable]
-          cancellation hint for <<it != a.end()>>, so the two are worth doing
-          together. *)
+          addresses. It is the obligation still left open by
+          [begin_is_not_end_ok] in <<test/array>>; the [ptr_comparable]
+          cancellation that used to accompany it is now discharged by
+          [ptr_comparable_valid_CX]. *)
       Lemma beginp_endp_agree_at_zero (this : ptr) : n = 0 -> beginp this = endp this.
       Proof. by move=>->. Qed.
 

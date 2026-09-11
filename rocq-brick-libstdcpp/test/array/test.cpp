@@ -107,9 +107,16 @@ CEnd(const array<int, 3>& a) {
     return a.cend();
 }
 
-// Iterating by index. Comparing two raw iterators (<<it != a.end()>>) is a
-// builtin pointer comparison, which the current automation cannot discharge for
-// two distinct pointers into the same object; indexing avoids that.
+// Comparing two raw iterators is a builtin pointer comparison between two
+// distinct pointers into the same object. Which of the resulting side conditions
+// can be discharged is recorded by the <<Fail Qed>> test [begin_is_not_end_ok]
+// in <<test_cpp_proof.v>>.
+bool
+BeginIsNotEnd(const array<int, 3>& a) {
+    return a.begin() != a.end();
+}
+
+// Iterating by index, which avoids that comparison.
 unsigned
 SumIndexed(const array<unsigned, 5>& a) {
     unsigned r = 0;
@@ -129,6 +136,77 @@ GetU(const array<unsigned, 5>& a, unsigned long i) {
 unsigned long
 SizeU(const array<unsigned, 5>& a) {
     return a.size();
+}
+
+/* --- constructing arrays --------------------------------------------------- */
+// Every client above receives its array as a reference, so nothing there forces
+// the representation predicate to be inhabited. These construct one, through the
+// copy and the move constructor, at two instantiations.
+
+int
+CopyThenGet(const array<int, 3>& a, unsigned long i) {
+    array<int, 3> b(a);
+    return b[i];
+}
+
+int
+MoveThenGet(array<int, 3>& a, unsigned long i) {
+    array<int, 3> b(std::move(a));
+    return b[i];
+}
+
+unsigned
+CopyThenGetU(const array<unsigned, 5>& a, unsigned long i) {
+    array<unsigned, 5> b(a);
+    return b[i];
+}
+
+unsigned
+MoveThenGetU(array<unsigned, 5>& a, unsigned long i) {
+    array<unsigned, 5> b(std::move(a));
+    return b[i];
+}
+
+// Brace initialization of an aggregate calls no constructor: it is handled by
+// BRiCk's initialization automation rather than by a specification in
+// [std.array]. A full initializer list and an empty one verify; a short list and
+// a nested one are pinned by <<Fail Qed>> tests in <<test_cpp_proof.v>>, because
+// the initialization automation does not cover those two forms yet.
+
+int
+BraceInitThenGet(unsigned long i) {
+    array<int, 3> a{1, 2, 3};
+    return a[i];
+}
+
+int
+BraceInitAssignmentThenGet(unsigned long i) {
+    array<int, 3> a = {1, 2, 3};
+    return a[i];
+}
+
+unsigned
+BraceInitThenGetU(unsigned long i) {
+    array<unsigned, 5> a{1, 2, 3, 4, 5};
+    return a[i];
+}
+
+int
+BraceInitPartialThenGet(unsigned long i) {
+    array<int, 3> a{1};
+    return a[i];
+}
+
+int
+BraceInitValueThenGet() {
+    array<int, 3> a{};
+    return a[1];
+}
+
+int
+BraceInitNestedThenGet(unsigned long i, unsigned long j) {
+    array<array<int, 2>, 2> a{{{1, 2}, {3, 4}}};
+    return a[i][j];
 }
 
 /* --- a nested instantiation ------------------------------------------------ */

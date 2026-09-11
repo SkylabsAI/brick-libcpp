@@ -5,6 +5,8 @@
  *)
 Require Import skylabs.auto.cpp.prelude.test.
 
+Require Import skylabs.cpp.string.
+
 Require Import skylabs.brick.libstdcpp.array.spec.
 Require Import skylabs.brick.libstdcpp.cassert.spec.
 Require Import skylabs.brick.libstdcpp.test.array.test_cpp.
@@ -153,10 +155,18 @@ Section with_cpp.
   (** <<std::move>> is only a cast; inline it so the move assignment is reached. *)
   cpp.spec "std::move<std::array<int, 3ul>&>(std::array<int, 3ul>&)" from source inline.
 
-  (** [moved "int"] is equality, so a moved-from <<std::array<int, 3> >> keeps its
-      element values and only ownership moves. The rewrite below discharges that:
-      [go] leaves the moved-from payload [∃ x', [| x = x' |] ** intR q x'], which
-      does not collapse to [intR q x] automatically. *)
+  (** [moved ty] is equality for the element types used here, so a moved-from
+      <<std::array>> keeps its element values and only ownership moves. [go] leaves
+      that as a payload [∃ x', [| x = x' |] ** Rp x'], which does not collapse to
+      [Rp x] on its own; this is the rewrite that does it. *)
+  #[local] Lemma moved_prim_elim (Rp : Z -> Rep) (x : Z) :
+    (Exists x' : Z, [| x = x' |] ** Rp x') -|- Rp x.
+  Proof.
+    iSplit.
+    - by iIntros "(%x' & -> & $)".
+    - iIntros "H"; iExists x; iSplitR; [ by iIntros "!%" | iFrame ].
+  Qed.
+
   cpp.spec "MoveTo(std::array<int, 3ul>&, std::array<int, 3ul>&)" as move_to_spec with
     (\arg{dstp} "dst" (Vref dstp)
      \arg{srcp} "src" (Vref srcp)
@@ -165,15 +175,7 @@ Section with_cpp.
      \post dstp |-> std.array.R "int" 3 1$m ys ** srcp |-> std.array.R "int" 3 1$m ys).
 
   Lemma move_to_ok : verify[ source ] move_to_spec.
-  Proof using MOD.
-    verify_spec; go.
-    have Hm : forall (q0 : cQp.t) (y : Z),
-        (Exists y2 : Z, [| y = y2 |] ** intR q0 y2) -|- intR q0 y.
-    { intros q0 y; iSplit.
-      - by iIntros "(%y2 & -> & $)".
-      - iIntros "H"; iExists y; iSplitR; [ by iIntros "!%" | iFrame ]. }
-    setoid_rewrite Hm. go.
-  Qed.
+  Proof using MOD. verify_spec; go. setoid_rewrite moved_prim_elim. go. Qed.
 
   (** ** Iterators
 
@@ -215,6 +217,34 @@ Section with_cpp.
     verify_spec; go.
     rewrite !o_sub_sub /=. go.
   Qed.
+
+  (** <<std::array>>'s iterators are raw pointers, so a condition such as
+      <<it != a.end()>> is a builtin pointer comparison between the first and
+      last element addresses, [p .[ "int" ! 0 ]] and [p .[ "int" ! 3 ]].
+      [wp_eval_ptr_neq] splits that into two obligations, and only one of them can
+      be discharged today:
+
+      - [ptr_comparable] between the two pointers. [ptr_comparable_valid_CX]
+        (SkyLabsAI/auto#452) proves it. It is passed explicitly because, unlike
+        [ptr_comparable_cstringR], it is not registered in a hint database.
+      - the value of the comparison, which [wp_eval_ptr_neq] states as
+        [bool_decide (p1 <> p2)]. Deciding it means going from pointer equality
+        back to index equality, which holds only where the pointers have addresses
+        -- and [valid_ptr] does not give that. [auto]'s [refine1_offset] records
+        exactly this gap: it is a [Refine1 false true], i.e. complete but not
+        sound, and is registered only for <<unsigned char>>.
+
+      So closing SkyLabsAI/auto#451 needs more than the merged hint, and the loop
+      below still iterates by index. The <<Fail Qed>> pins the one remaining
+      obligation and starts failing once it is closed. *)
+
+  cpp.spec "BeginIsNotEnd(const std::array<int, 3ul>&)" as begin_is_not_end_spec with
+    (\arg{ap} "a" (Vref ap)
+     \prepost{q xs} ap |-> std.array.R "int" 3 q xs
+     \post[Vbool true] emp).
+
+  Lemma begin_is_not_end_ok : verify[ source ] begin_is_not_end_spec.
+  Proof using MOD. verify_spec; go using ptr_comparable_valid_CX. Fail Qed. Abort.
 
   (** ** Iterating over an array
 
@@ -281,6 +311,134 @@ Section with_cpp.
 
   Lemma get_nested_ok : verify[ source ] get_nested_spec.
   Proof using MOD. verify_spec; go. Qed.
+
+  (** ** Constructing an array
+
+      Every client above receives its array by reference, so none of them forces
+      [std.array.R] to be inhabited. These do: each builds a fresh array from an
+      existing one and then reads it back, through the copy and the move
+      constructor, at two instantiations. *)
+
+  cpp.spec "CopyThenGet(const std::array<int, 3ul>&, unsigned long)"
+    as copy_then_get_spec with
+    (\arg{ap} "a" (Vref ap)
+     \arg{i} "i" (Vint i)
+     \require 0 ≤ i < 3
+     \prepost{q xs} ap |-> std.array.R "int" 3 q xs
+     \post[Vint (xs !!! i)] emp).
+
+  Lemma copy_then_get_ok : verify[ source ] copy_then_get_spec.
+  Proof using MOD. verify_spec; go. Qed.
+
+  cpp.spec "CopyThenGetU(const std::array<unsigned int, 5ul>&, unsigned long)"
+    as copy_then_get_u_spec with
+    (\arg{ap} "a" (Vref ap)
+     \arg{i} "i" (Vint i)
+     \require 0 ≤ i < 5
+     \prepost{q xs} ap |-> std.array.R "unsigned" 5 q xs
+     \post[Vint (xs !!! i)] emp).
+
+  Lemma copy_then_get_u_ok : verify[ source ] copy_then_get_u_spec.
+  Proof using MOD. verify_spec; go. Qed.
+
+  cpp.spec "std::move<std::array<unsigned int, 5ul>&>(std::array<unsigned int, 5ul>&)"
+    from source inline.
+
+  (** As in [move_to_ok], the moved-from array keeps its element values;
+      [moved_prim_elim] collapses the leftover existential. *)
+  cpp.spec "MoveThenGet(std::array<int, 3ul>&, unsigned long)"
+    as move_then_get_spec with
+    (\arg{ap} "a" (Vref ap)
+     \arg{i} "i" (Vint i)
+     \require 0 ≤ i < 3
+     \prepost{xs} ap |-> std.array.R "int" 3 1$m xs
+     \post[Vint (xs !!! i)] emp).
+
+  Lemma move_then_get_ok : verify[ source ] move_then_get_spec.
+  Proof using MOD. verify_spec; go. setoid_rewrite moved_prim_elim. go. Qed.
+
+  cpp.spec "MoveThenGetU(std::array<unsigned int, 5ul>&, unsigned long)"
+    as move_then_get_u_spec with
+    (\arg{ap} "a" (Vref ap)
+     \arg{i} "i" (Vint i)
+     \require 0 ≤ i < 5
+     \prepost{xs} ap |-> std.array.R "unsigned" 5 1$m xs
+     \post[Vint (xs !!! i)] emp).
+
+  Lemma move_then_get_u_ok : verify[ source ] move_then_get_u_spec.
+  Proof using MOD. verify_spec; go. setoid_rewrite moved_prim_elim. go. Qed.
+
+  (** ** Brace initialization
+
+      Aggregate initialization calls no constructor ([array.overview]): the AST
+      carries an [Einitlist] rather than an [Econstructor], so these clients never
+      reach [std.array]'s constructor specifications. The representation predicate
+      has to come out of BRiCk's initialization automation instead, which checks
+      [std.array.R] against libstdc++'s layout rather than against an assumed
+      specification. *)
+
+  cpp.spec "BraceInitThenGet(unsigned long)" as brace_init_then_get_spec with
+    (\arg{i} "i" (Vint i)
+     \require 0 ≤ i < 3
+     \post[Vint ([1; 2; 3] !!! i)] emp).
+
+  Lemma brace_init_then_get_ok : verify[ source ] brace_init_then_get_spec.
+  Proof using MOD. verify_spec; go. Qed.
+
+  cpp.spec "BraceInitAssignmentThenGet(unsigned long)" as brace_init_assignment_then_get_spec with
+    (\arg{i} "i" (Vint i)
+     \require 0 ≤ i < 3
+     \post[Vint ([1; 2; 3] !!! i)] emp).
+
+  Lemma brace_init_assignment_then_get_ok : verify[ source ] brace_init_assignment_then_get_spec.
+  Proof using MOD. verify_spec; go. Qed.
+
+  cpp.spec "BraceInitThenGetU(unsigned long)" as brace_init_then_get_u_spec with
+    (\arg{i} "i" (Vint i)
+     \require 0 ≤ i < 5
+     \post[Vint ([1; 2; 3; 4; 5] !!! i)] emp).
+
+  Lemma brace_init_then_get_u_ok : verify[ source ] brace_init_then_get_u_spec.
+  Proof using MOD. verify_spec; go. Qed.
+
+  (** LIMITATION: a short initializer list value-initializes the remaining
+      elements, which the AST records as an [Einitlist] carrying a filler
+      ([Eimplicit_init]). The initialization automation does not handle that form
+      yet, so this is pinned rather than proved. *)
+  cpp.spec "BraceInitPartialThenGet(unsigned long)" as brace_init_partial_then_get_spec with
+    (\arg{i} "i" (Vint i)
+     \require 0 ≤ i < 3
+     \post[Vint ([1; 0; 0] !!! i)] emp).
+
+  Lemma brace_init_partial_then_get_ok : verify[ source ] brace_init_partial_then_get_spec.
+  Proof using MOD. verify_spec; go. Fail Qed. Abort.
+
+  (** <<array<int, 3> a{}>> value-initializes every element, unlike the omitted
+      default constructor; see the LIMITATION in [std.array]. *)
+  cpp.spec "BraceInitValueThenGet()" as brace_init_value_then_get_spec with
+    (\post[Vint 0] emp).
+
+  (** Value initialization goes through [primR] rather than through the element
+      type's [BundledRep], hence the explicit hint. The index is a literal here:
+      with a symbolic one the leftover total lookup ends up in the premise of a
+      wand, where the [Normalize] hint that handles it elsewhere cannot reach it. *)
+  Lemma brace_init_value_then_get_ok : verify[ source ] brace_init_value_then_get_spec.
+  Proof using MOD. verify_spec; go using prim.primR_aggressiveC. Qed.
+
+  cpp.spec "BraceInitNestedThenGet(unsigned long, unsigned long)"
+    as brace_init_nested_then_get_spec with
+    (\arg{i} "i" (Vint i)
+     \arg{j} "j" (Vint j)
+     \require 0 ≤ i < 2
+     \require 0 ≤ j < 2
+     \post[Vint (([[1; 2]; [3; 4]] !!! i) !!! j)] emp).
+
+  (** LIMITATION: the nested aggregate initializer is an [Einitlist] of
+      [Einitlist]s, which the initialization automation does not handle yet. Note
+      that [get_nested_ok] above does verify reads of a nested array, so it is the
+      initialization rather than [std.array.R] that is missing here. *)
+  Lemma brace_init_nested_then_get_ok : verify[ source ] brace_init_nested_then_get_spec.
+  Proof using MOD. verify_spec; go. Fail Qed. Abort.
 
   (** ** Remaining entry points *)
 
@@ -386,6 +544,14 @@ Section with_cpp.
   Definition get_u_B := [LINK] get_u_ok.
   Definition size_u_B := [LINK] size_u_ok.
   Definition get_nested_B := [LINK] get_nested_ok.
+  Definition copy_then_get_B := [LINK] copy_then_get_ok.
+  Definition copy_then_get_u_B := [LINK] copy_then_get_u_ok.
+  Definition move_then_get_B := [LINK] move_then_get_ok.
+  Definition move_then_get_u_B := [LINK] move_then_get_u_ok.
+  Definition brace_init_then_get_B := [LINK] brace_init_then_get_ok.
+  Definition brace_init_assignment_then_get_B := [LINK] brace_init_assignment_then_get_ok.
+  Definition brace_init_then_get_u_B := [LINK] brace_init_then_get_u_ok.
+  Definition brace_init_value_then_get_B := [LINK] brace_init_value_then_get_ok.
   Definition size0_B := [LINK] size0_ok.
   Definition empty0_B := [LINK] empty0_ok.
   Definition data0_B := [LINK] data0_ok.
@@ -399,6 +565,9 @@ Section with_cpp.
     size_B max_size_B empty_B get_B set_B get_at_B front_B back_B data_B
     fill_B swap_B assign_to_B move_to_B first_via_begin_B first_via_cbegin_B
     cend_B last_via_end_B sum_indexed_B get_u_B size_u_B get_nested_B
+    copy_then_get_B copy_then_get_u_B move_then_get_B move_then_get_u_B
+    brace_init_then_get_B brace_init_assignment_then_get_B
+    brace_init_then_get_u_B brace_init_value_then_get_B
     size0_B empty0_B data0_B begin_is_end0_B fill0_B swap0_B
     test_B main_B : sl_opacity.
 
@@ -409,6 +578,10 @@ Section with_cpp.
     first_via_begin_spec ** first_via_cbegin_spec ** cend_spec ** last_via_end_spec **
     sum_indexed_spec **
     get_u_spec ** size_u_spec ** get_nested_spec **
+    copy_then_get_spec ** copy_then_get_u_spec **
+    move_then_get_spec ** move_then_get_u_spec **
+    brace_init_then_get_spec ** brace_init_assignment_then_get_spec **
+    brace_init_then_get_u_spec ** brace_init_value_then_get_spec **
     size0_spec ** empty0_spec ** data0_spec ** begin_is_end0_spec **
     fill0_spec ** swap0_spec **
     test_spec ** main_spec.
