@@ -53,11 +53,9 @@ Section with_cpp.
   Lemma test_delete_array_ok : verify[demo_cpp.source] "test_delete_array(int* )".
   Proof.
     verify_spec; go.
-    case_bool_decide; try by go.
-    go.
-    case_bool_decide.
-    { go. rewrite H. go. exfalso; lia. }
-    { go. }
+    case_bool_decide; go; [].
+    case_bool_decide as Hnull; go; [].
+    go. rewrite Hnull. go. exfalso; lia.
   Qed.
 
   (** The C++ standard recommends <<262144 <= SIZE_MAX>>.  *)
