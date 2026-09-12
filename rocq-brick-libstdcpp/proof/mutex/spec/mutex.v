@@ -18,10 +18,12 @@ Import linearity.
 
 (** A MUTEX_PREDS says a mutex spec is parametrized by some `token`, `not_locked`
   and `locked`. The exact model depends on the implementation. *)
+
+(* TODO add my_mutexes rules to MUTEX_PREDS *)
 Module Type MUTEX_PREDS.
   Parameter gname : Set.
   (** Mutex-set pool agreed before mutex creation. *)
-  Parameter pool_name : gname -> iprop.gname.
+  Parameter mutex_inv_namespace : namespace.
 
   Parameter G : forall `{Σ : cpp_logic}, Type.
   Existing Class G.
@@ -68,8 +70,8 @@ Section with_cpp.
       which R likely has. *)
   Definition ctor_spec : ptr -> WpSpec mpred val val :=
     (\this this
-      \pre{P γpool} ▷P ** [| WeaklyObjective P |]
-      \post |={⊤}=> Exists g, [| Preds.pool_name (state_name g) = γpool |] **
+      \pre{P} ▷P ** [| WeaklyObjective P |]
+      \post |={⊤}=> Exists g,
               this |-> R g 1$m P ** Preds.token (state_name g) 1$m).
 
   Definition dtor_spec : ptr -> WpSpec mpred val val :=

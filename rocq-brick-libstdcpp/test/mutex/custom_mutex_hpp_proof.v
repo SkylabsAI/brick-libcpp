@@ -1,6 +1,6 @@
 (** Provisional *)
 
-Require Import iris.algebra.gset.
+Require Import iris.algebra.coPset.
 
 Require Import skylabs.auto.cpp.proof.
 Require Import skylabs.auto.cpp.hints.base_derived.
@@ -18,12 +18,14 @@ Module CustomMutexState (Sets0 : MUTEX_SETS) (Tokens0 : MUTEX_TOKENS)
     (Owners0 : OWNER_TID) <: MUTEX_PREDS.
   Record mutex_gname : Set := MkGname {
     pool_gname : iprop.gname;
-    invariant_gname : iprop.gname;
     token_gname : iprop.gname;
     owner_gname : iprop.gname;
   }.
   Definition gname : Set := mutex_gname.
   Definition pool_name (γ : gname) : iprop.gname := γ.(pool_gname).
+
+  Definition mutex_inv_namespace : namespace :=
+    nroot .@@ "MyMutex" .@ "inv_namespace".
 
   Class stateG `{Σ : cpp_logic} := {
     #[global] sets_G :: Sets0.G Σ;
@@ -41,7 +43,7 @@ Module CustomMutexState (Sets0 : MUTEX_SETS) (Tokens0 : MUTEX_TOKENS)
 
   Definition not_locked_ghost `{Σ : cpp_logic, !G Σ}
       (γ : mutex_gname) (th : thread_idT) (q : Qp) : mpred :=
-    Sets0.mutex_set_frag γ.(pool_gname) th (GSet {[γ.(invariant_gname)]}) **
+    Sets0.my_mutexes γ.(pool_gname) th (coPset.CoPset $ ↑mutex_inv_namespace) **
     Tokens0.token γ.(token_gname) q.
 
   Definition owner_token `{Σ : cpp_logic, !G Σ}
@@ -71,14 +73,14 @@ Module CustomMutexState (Sets0 : MUTEX_SETS) (Tokens0 : MUTEX_TOKENS)
     apply observe_2_sep_r. apply _.
   Qed.
 
-  (** While held, the invariant owns this thread's singleton mutex fragment
-      and the token balance. The thread retains its mutex-set authority.
+  (** While held, the invariant owns this thread's singleton mutex set
+      and the token balance. The thread retains its remaining mutex names.
       When free, both halves of the previous owner remain in the invariant. *)
   Definition state `{Σ : cpp_logic, !G Σ}
       (γ : mutex_gname) (b : bool) : mpred :=
     (if b then
       ∃ th, Owners0.owner_tid_auth γ.(owner_gname) (Some th) **
-        Sets0.mutex_set_frag γ.(pool_gname) th (GSet {[γ.(invariant_gname)]}) **
+        Sets0.my_mutexes γ.(pool_gname) th (coPset.CoPset $ ↑mutex_inv_namespace) **
         Tokens0.token_not_full γ.(token_gname)
     else
       ∃ owner, Owners0.owner_tid_auth γ.(owner_gname) owner **
@@ -93,14 +95,14 @@ Module CustomMutexState (Sets0 : MUTEX_SETS) (Tokens0 : MUTEX_TOKENS)
   Section state_laws.
     Context `{Σ : cpp_logic, !G Σ}.
 
-    Lemma alloc (γpool : iprop.gname) inv_gname :
-      ⊢ |==> ∃ γ, [| γ.(pool_gname) = γpool |] ** [| γ.(invariant_gname) = inv_gname |] **
+    Lemma alloc (γpool : iprop.gname) :
+      ⊢ |==> ∃ γ, [| γ.(pool_gname) = γpool |] **
         token γ 1$m ** state γ false.
     Proof.
       iMod Tokens0.alloc as (gt) "[T GT]".
       iMod (Owners0.alloc None) as (go) "[OA OF]".
-      iModIntro. iExists (MkGname γpool inv_gname gt go).
-      iSplit; first done. iSplit; first done.
+      iModIntro. iExists (MkGname γpool gt go).
+      iSplit; first done.
       rewrite /token /state /=. iFrame "T". iExists None.
       iFrame "OA OF".
       iApply Tokens0.token_full_init. iExact "GT".
@@ -180,7 +182,11 @@ Module CustomMutexState (Sets0 : MUTEX_SETS) (Tokens0 : MUTEX_TOKENS)
   Proof.
     intros q1 q2. rewrite /not_locked /not_locked_ghost.
     iIntros "[[F1 _] _] [[F2 _] _]".
-    iDestruct (Sets0.mutex_set_frag_exclusive with "[$F1 $F2]") as %[].
+    have Hnonempty : (↑ mutex_inv_namespace : coPset) ∩ ↑ mutex_inv_namespace ≠ ∅.
+    { rewrite intersection_idemp_L. apply nclose_non_empty. }
+    iDestruct (Sets0.my_mutexes_exclusive γ.(pool_gname) th
+      (↑ mutex_inv_namespace) (↑ mutex_inv_namespace) Hnonempty
+      with "[$F1 $F2]") as %[].
   Qed.
 
   (** Public ownership includes the physical owner written by [lock]. *)
@@ -271,11 +277,10 @@ Module custom_mutex.
       \post emp).
   End unproved_specs.
 
-  Definition gname : Set := State.mutex_gname.
-  Definition lock_state_gname (γ : gname) : State.gname := γ.
-  Definition cinv_gname : gname -> iprop.gname := State.invariant_gname.
-
-  Definition lock_namespace : namespace := nroot .@@ "MyMutex".
+  Record gname : Set := MkGname {
+    lock_state_gname :> State.mutex_gname;
+    cinv_gname : iprop.gname;
+  }.
 
   Section with_Σ.
     Context `{Σ : cpp_logic, σ : genv, HAS_THREADS : !HasStdThreads Σ,
@@ -294,7 +299,7 @@ Module custom_mutex.
     Definition IR (γ : gname) (q : cQp.t) (P : mpred) : Rep :=
       structR N q$m **
       as_Rep (fun this =>
-        cinv lock_namespace (cinv_gname γ) (mutex_inv this γ P) **
+        cinv State.mutex_inv_namespace (cinv_gname γ) (mutex_inv this γ P) **
         cinv_own (cinv_gname γ) q
       ).
     Hint Opaque IR : sl_opacity typeclass_instances.
@@ -381,7 +386,7 @@ Module custom_mutex.
       iDestruct "IR" as "(S & #CI & CO)".
       rewrite /std.atomic.do_exchange.
       iAuIntro1. rewrite /atomic1_acc.
-      iInv lock_namespace as "Inv" "Hclose".
+      iInv State.mutex_inv_namespace as "Inv" "Hclose".
       iDestruct "Inv" as "[Inv CO]".
       iEval (rewrite /mutex_inv) in "Inv".
       iDestruct "Inv" as (b) "(>L & State & Resources)".
@@ -405,7 +410,7 @@ Module custom_mutex.
           iModIntro. rewrite /IR _at_sep _at_as_Rep /=.
           iFrame "CI". iFrame. iPureIntro. auto.
         + iDestruct "Resources" as "[P Owner]".
-          iMod (State.do_lock with "[$State $NL]") as "[State Locked]".
+          iMod (State.do_lock _ with "[$State $NL]") as "[State Locked]".
           iMod ("Hclose" with "[L State]") as "_".
           { iNext. rewrite /mutex_inv. iExists true.
             iSplitL "L"; first by ework $usenamed=true with br_erefl.
@@ -436,7 +441,7 @@ Module custom_mutex.
       iDestruct "IR" as "(S & #CI & CO)".
       rewrite /std.atomic.do_store.
       iAcIntro. rewrite /commit_acc /=.
-      iInv lock_namespace as "Inv" "Hclose".
+      iInv State.mutex_inv_namespace as "Inv" "Hclose".
       iDestruct "Inv" as "[Inv CO]".
       iEval (rewrite /mutex_inv) in "Inv".
       iDestruct "Inv" as (b) "(>L & State & Resources)".
@@ -445,7 +450,7 @@ Module custom_mutex.
       iSplitL "L"; first by ework $usenamed=true with br_erefl.
       iNext. iIntros "L". iMod "Y" as "_".
       destruct b.
-      - iMod (State.do_unlock with "[$State $Locked]") as "[State NL]".
+      - iMod (State.do_unlock _ with "[$State $Locked]") as "[State NL]".
         iMod ("Hclose" with "[L State P Owner]") as "_".
         { iNext. rewrite /mutex_inv. iExists false.
           iSplitL "L"; first by ework $usenamed=true with br_erefl.
@@ -511,17 +516,14 @@ Module custom_mutex.
       wname [P] "P".
       wname [_ |-> atomic.R _ _ _] "L".
       wname [_ |-> thread_idR _ _] "Owner".
-      iMod (cinv_alloc_cofinite ∅ ⊤ lock_namespace) as (gi) "(_ & CO & Halloc)".
-      iMod (State.alloc γpool gi) as (gs) "(%Hpool & %Hinv & T & State)".
-      iMod ("Halloc" $! (mutex_inv this gs P)
-        with "[] [L P Owner State]") as "#CI".
-      { iPureIntro. rewrite /mutex_inv. apply _. }
-      { iNext. rewrite /mutex_inv /=. iExists false. iFrame. }
-      iModIntro. iExists gs.
-      iSplit; first done.
-      subst gi.
-      rewrite /IR _at_sep _at_as_Rep /cinv_gname /=.
-      iFrame "CI". iFrame.
+      iMod (State.alloc 1%positive) as (gs) "(_ & T & State)".
+      iMod (cinv_alloc with "[L P Owner State]")
+        as (gi) "[#CI CO]"; last first.
+      - iModIntro. iExists (MkGname gs gi).
+        rewrite /IR _at_sep _at_as_Rep /mutex_inv /=.
+        iFrame "CI". iFrame.
+      - iNext. iExists false. iFrame.
+      - apply _.
     Qed.
 
     Lemma mymutex_dtor_proof : verify[source] "MyMutex::~MyMutex()".
